@@ -25,12 +25,7 @@ def train(epoch):
 		#to remove eventually, data size 28 (step) x 128 (batch) x 28 (dim)
 		data = Variable(data.squeeze().transpose(0, 1))
 		data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
-		
-		print('data type', type(data))
-		print('data shape', np.shape(data))
 
-		print('data 0 type', type(data[0].data.numpy()))
-		print('data 0 shape', np.shape(data[0].data.numpy()))
 		#forward + backward + optimize
 		optimizer.zero_grad()
 		kld_loss, nll_loss, _, _ = model(data)
@@ -101,10 +96,10 @@ plt.ion()
 
 #init model + optimizer + datasets
 # SynthDataset(train=True)
-
+# datasets.MNIST('data', train=True, download=True,
+# 	transform=transforms.ToTensor())
 train_loader = torch.utils.data.DataLoader(
-	datasets.MNIST('data', train=True, download=True,
-	transform=transforms.ToTensor()),
+	SynthDataset(train=True),
     batch_size=batch_size, shuffle=True)
 
 test_loader = torch.utils.data.DataLoader(

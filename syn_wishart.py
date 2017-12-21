@@ -3,6 +3,7 @@ import numpy.random as npr
 from numpy.linalg import inv, cholesky
 from scipy.stats import chi2
 from torch.utils.data import Dataset
+import torch
 
 
 class SynthDataset(Dataset):
@@ -10,8 +11,8 @@ class SynthDataset(Dataset):
 
         self.train = train
         self.transform = transform
-        self.num_cov = int(1e0)
-        self.num_exp = int(1e3)
+        self.num_cov = int(1e3)
+        self.num_exp = int(1e4)
 
 
         self.phi = np.array([[1,0.5,0],[0.5,1,0],[0,0,1]])
@@ -28,12 +29,10 @@ class SynthDataset(Dataset):
         y_i = np.array( [ npr.multivariate_normal(np.zeros((3,)), cov) for j in range(self.num_exp) ] )
 
         sample = y_i[idx%self.num_exp,]
-        sample = np.expand_dims(sample, axis=0)
-        print('sample ', idx, sample)
 
         if self.transform:
             sample = self.transform(sample)
-        return sample.astype(float), sample.astype(float)
+        return torch.FloatTensor(sample), torch.FloatTensor(sample)
 
 
 
