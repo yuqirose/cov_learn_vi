@@ -22,7 +22,6 @@ def train(epoch):
 
 		#transforming data
 		#data = Variable(data)
-		#to remove eventually, data size 28 (step) x 128 (batch) x 28 (dim)
 		data = Variable(data.squeeze().transpose(0, 1))
 		data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
@@ -44,9 +43,9 @@ def train(epoch):
 				kld_loss.data[0] / batch_size,
 				nll_loss.data[0] / batch_size))
 
-			# sample = model.sample(28)
-			# plt.imshow(sample.numpy())
-			# plt.pause(1e-6)
+			sample = model.sample()
+			plt.imshow(sample.numpy())
+			plt.pause(1e-6)
 
 		train_loss += loss.data[0]
 
@@ -80,7 +79,7 @@ def test(epoch):
 #hyperparameters
 x_dim = 3
 h_dim = 100
-z_dim = 16
+z_dim = 3
 n_layers =  1
 n_epochs = 100
 clip = 10
@@ -119,6 +118,14 @@ for epoch in range(1, n_epochs + 1):
 
 	#saving model
 	if epoch % save_every == 1:
-		fn = 'saves/vrnn_state_dict_'+str(epoch)+'.pth'
+		fn = 'saves/vae_state_dict_'+str(epoch)+'.pth'
 		torch.save(model.state_dict(), fn)
 		print('Saved model to '+fn)
+
+
+
+
+
+
+
+

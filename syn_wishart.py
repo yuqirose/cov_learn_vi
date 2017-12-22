@@ -11,24 +11,29 @@ class SynthDataset(Dataset):
 
         self.train = train
         self.transform = transform
-        self.num_cov = int(1e3)
-        self.num_exp = int(1e4)
+        self.num_cov = int(1e2)
+        self.num_exp = int(1e3)
 
+        self.data=np.load('data/syn_wishart.npy')
 
-        self.phi = np.array([[1,0.5,0],[0.5,1,0],[0,0,1]])
-        self.nu = 5
-        self.covs = np.array([ inv_wishart_rand(self.nu,self.phi) for i in range(self.num_cov)])
+        # Generate sample statistics
+        # self.phi = np.array([[1,0.5,0],[0.5,1,0],[0,0,1]])
+        # self.nu = 5
+        # self.covs = np.array([ inv_wishart_rand(self.nu,self.phi) for i in range(self.num_cov)])
 
 
     def __len__(self):
         return self.num_cov * self.num_exp
 
     def __getitem__(self, idx):
-        cov_idx = int(idx/self.num_exp)
-        cov = self.covs[cov_idx]
-        y_i = np.array( [ npr.multivariate_normal(np.zeros((3,)), cov) for j in range(self.num_exp) ] )
 
-        sample = y_i[idx%self.num_exp,]
+        cov_idx = int(idx/self.num_exp)
+        data_i = self.data[cov_idx]
+        sample = data_i[idx%self.num_exp,]
+        # Generate samples on the fly
+        # cov = self.covs[cov_idx]
+        # y_i = np.array( [ npr.multivariate_normal(np.zeros((3,)), cov) for j in range(self.num_exp) ] )
+        # sample = y_i[idx%self.num_exp,]
 
         if self.transform:
             sample = self.transform(sample)
@@ -84,6 +89,8 @@ if __name__ == '__main__':
 
     print(len(y))
     print(y[0].shape)
+
+    np.save('data/syn_wishart.npy', y)
 
 
    

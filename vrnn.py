@@ -182,5 +182,5 @@ class VRNN(nn.Module):
 
 
 	def _nll_gauss(self, mean, std, x):
-		tmp = Variable( torch.ones(x.size(0), x.size(1))* np.log(2* np.pi) ) + 2 * torch.log(std + REGULATOR)
+		tmp = Variable( torch.ones(x.size(0), x.size(1))* np.log(2* np.pi) ) + 2 * torch.log(std)
 		return 0.5 * torch.sum(tmp + 1.0/std.pow(2) * (x-mean).pow(2))
