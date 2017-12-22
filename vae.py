@@ -20,10 +20,10 @@ class VAE(nn.Module):
 
         self.fc1 = nn.Linear(x_dim, h_dim) #prior
         self.fc21 = nn.Linear(h_dim, z_dim)
-        self.fc22 = nn.Linear(h_dim, z_dim)
+        self.fc22 = nn.Linear(h_dim, z_dim*z_dim)
         self.fc3 = nn.Linear(z_dim*z_dim, h_dim)
         self.fc41 = nn.Linear(h_dim, x_dim)
-        self.fc42 = nn.Linear(h_dim, x_dim*z_dim)
+        self.fc42 = nn.Linear(h_dim, x_dim*x_dim)
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -33,16 +33,20 @@ class VAE(nn.Module):
         produce a series of zs
         """
         h1 = self.relu(self.fc1(x))
-        return self.fc21(h1), self.fc22(h1)
+        mu = self.fc21(h1)
+        logcov = self.fc22(h1).view(-1,self.z_dim, self.z_dim)
+        return mu, logcov
 
-    def reparameterize(self, mu, logvar):
-        # TODO: mu + Aesp, how to get A
+    def reparameterize(self, mu, logcov):
+        # TODO: mu + Aesp, how to get A, predict var
         if self.training:
-          std = logvar.mul(0.5).exp_()
-          eps = Variable(std.data.new(std.size()).normal_())
-          return eps.mul(std).add_(mu)
+            cov = logcov.exp_()
+            eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
+            eps_view = eps.unsqueeze(2)
+            z = cov.bmm(eps_view).squeeze(2).add(mu)
+            return z
         else:
-          return mu
+            return mu
 
     def decode(self, z):
         h3 = self.relu(self.fc3(z))
@@ -81,12 +85,15 @@ class VAE(nn.Module):
     
         return sample
 
-    def _kld_loss(self, mu, logvar):
-        # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        # Normalise by same number of elements as in reconstruction
-        KLD = torch.mean(KLD)
-        return KLD
+    def _kld_loss(self, mu, logvar, prior_mean, prior_cov ):
+        # TODO: need to re-write
+        # 0.5 * log det(S2)/det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)S2^-2(mu2-mu1)
+        var = logvar.exp()
+        cov = var.bmm(var)
+        KLD =  torch.log( np.linalg.det(cov.data.numpy()) / np.linalg.det(prior_cov.data.numpy()))
+        KLD = KLD +  np.trace(cov.inv().bmm.(prior_cov)) + (mu-prior_mean).bmm.(cov.inv())(mu-prior_mean)
+
+        return -0.5*KLD
 
     def _nll_loss(self, mean, cov, x): 
         tmp = Variable( mean.size()[0]*torch.log(np.linalg.det(cov.data.numpy())))
