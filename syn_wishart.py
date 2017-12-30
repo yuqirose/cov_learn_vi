@@ -4,6 +4,10 @@ from numpy.linalg import inv, cholesky
 from scipy.stats import chi2
 from torch.utils.data import Dataset
 import torch
+import matplotlib.pyplot as plt 
+import seaborn as sns
+
+
 
 
 class SynthDataset(Dataset):
@@ -11,10 +15,9 @@ class SynthDataset(Dataset):
 
         self.train = train
         self.transform = transform
-        self.num_cov = int(1e2)
-        self.num_exp = int(1e3)
+        self.num_exp = int(1e4)
 
-        self.data=np.load('data/syn_wishart.npy')
+        self.data=np.load('data/syn_mvn.npy')
 
         # Generate sample statistics
         # self.phi = np.array([[1,0.5,0],[0.5,1,0],[0,0,1]])
@@ -23,13 +26,10 @@ class SynthDataset(Dataset):
 
 
     def __len__(self):
-        return self.num_cov * self.num_exp
+        return self.num_exp
 
     def __getitem__(self, idx):
-
-        cov_idx = int(idx/self.num_exp)
-        data_i = self.data[cov_idx]
-        sample = data_i[idx%self.num_exp,]
+        sample = self.data[idx,]
         # Generate samples on the fly
         # cov = self.covs[cov_idx]
         # y_i = np.array( [ npr.multivariate_normal(np.zeros((3,)), cov) for j in range(self.num_exp) ] )
@@ -65,9 +65,7 @@ def wishart_rand(nu, phi):
                 foo[i,j]  = npr.normal(0,1)
     return np.dot(chol, np.dot(foo, np.dot(foo.T, chol.T)))
 
-
-    
-if __name__ == '__main__':
+def gen_inv_wishart():
     npr.seed(1)
     nu = 5
     num_cov = int(1e2)
@@ -92,5 +90,18 @@ if __name__ == '__main__':
 
     np.save('data/syn_wishart.npy', y)
 
+def gen_mvn():
+    npr.seed(1)
+    cov = np.array([[1,0.5],[0.5,1]])
+    num_exp = int(1e4)
 
-   
+    y =  np.array( [ npr.multivariate_normal(np.zeros((2,)), cov) for j in range(num_exp) ] )
+    print(y.shape)
+    np.save('data/syn_mvn.npy', y)
+    
+if __name__ == '__main__':
+    y  = np.load('data/syn_mvn.npy')
+    # plt.scatter(y[:,0], y[:,1])
+    # plt.show()
+    sns.kdeplot(y[:,0], y[:,1], color="b", shade=True)
+    plt.show()

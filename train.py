@@ -44,7 +44,7 @@ def train(epoch):
 				nll_loss.data[0] / batch_size))
 
 			sample = model.sample()
-			plt.imshow(sample.numpy())
+			# plt.imshow(sample.numpy())
 			plt.pause(1e-6)
 
 		train_loss += loss.data[0]
@@ -77,13 +77,13 @@ def test(epoch):
 
 
 #hyperparameters
-x_dim = 3
+x_dim = 2
 h_dim = 100
-z_dim = 3
+z_dim = 2
 n_layers =  1
 n_epochs = 100
 clip = 10
-learning_rate = 1e-3
+learning_rate = 1e-2
 batch_size = 16
 seed = 128
 print_every = 100
