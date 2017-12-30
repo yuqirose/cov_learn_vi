@@ -17,7 +17,6 @@ class VAE(nn.Module):
         self.x_dim = x_dim
         self.h_dim = h_dim
         self.z_dim = z_dim
-
         # feature
         self.fc0 = nn.Linear(x_dim, h_dim)
         # encode
@@ -67,30 +66,28 @@ class VAE(nn.Module):
 
         # decoder
         dec_mean, dec_cov = self.decode(z)
-
-        # loss
         kld_loss = self._kld_loss(enc_mean, enc_cov)
-        bce_loss = self._bce_loss(dec_mean, x )
+        bce_loss = self._bce_loss(dec_mean, x)
 
-        return kld_loss, bce_loss,  (enc_mean, enc_cov), (dec_mean, dec_cov)
+        return kld_loss, bce_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
 
     def sample(self):
-        h = Variable(torch.zeros(1, self.x_dim))
+        h = Variable(torch.zeros(200, self.x_dim))
         # encoder 
         enc_mean, enc_cov = self.encode(h)
         z = self.reparameterize(enc_mean, enc_cov)
-        sample = z.data.squeeze(0)
-        print('sample shape', sample.shape)
-        return sample
+        return z.data.numpy()
 
     def _kld_loss(self, mu, logcov):
-        KLD = -0.5 * torch.sum(1 + logcov - mu.pow(2) - logcov.exp())
+        # q||p, q~N(mu1,S1), p~N(mu2,S2), mu1=mu, S1=cov, mu2=0, S2=I
+        # 0.5 * (log 1 - log prod(cov) -d + sum(cov) + mu^2)
+        KLD = 0.5 * torch.sum( -logcov -1 + logcov.exp()+ mu.pow(2))
         # Normalise by same number of elements as in reconstruction
-        # KLD /= args.batch_size
+        batch_size = mu.size()[0]
+        KLD /= batch_size
         return KLD
 
     # def _kld_loss(self, mu, logcov):
-    #     # prior is normal 
     #     # 0.5 * log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)
     #     cov = logcov.exp()
     #     prior_cov = prior_cov.exp()

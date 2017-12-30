@@ -100,6 +100,7 @@ def gen_mvn():
     np.save('data/syn_mvn.npy', y)
     
 if __name__ == '__main__':
+    # gen_mvn()
     y  = np.load('data/syn_mvn.npy')
     # plt.scatter(y[:,0], y[:,1])
     # plt.show()

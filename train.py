@@ -7,6 +7,7 @@ import torch.utils.data
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 import matplotlib.pyplot as plt 
+import seaborn as sns
 from vae import VAE
 from syn_wishart import SynthDataset
 
@@ -14,7 +15,6 @@ from syn_wishart import SynthDataset
 Neural Network (VRNN) from https://arxiv.org/abs/1506.02216
 using unimodal isotropic gaussian distributions for 
 inference, prior, and generating models."""
-
 
 def train(epoch):
 	train_loss = 0
@@ -27,7 +27,9 @@ def train(epoch):
 
 		#forward + backward + optimize
 		optimizer.zero_grad()
-		kld_loss, nll_loss, _, _ = model(data)
+		kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov) = model(data)
+		
+		# loss
 		loss = kld_loss + nll_loss
 		loss.backward()
 		optimizer.step()
@@ -44,8 +46,12 @@ def train(epoch):
 				nll_loss.data[0] / batch_size))
 
 			sample = model.sample()
-			# plt.imshow(sample.numpy())
+			print(sample.shape)
+			sns.kdeplot(sample[:,0], sample[:,1], color="b", shade=True)
+			plt.show()
 			plt.pause(1e-6)
+			plt.gcf().clear()
+			 # plt.imshow(sample.numpy())
 
 		train_loss += loss.data[0]
 
@@ -88,6 +94,7 @@ batch_size = 16
 seed = 128
 print_every = 100
 save_every = 10
+
 
 #manual seed
 torch.manual_seed(seed)
