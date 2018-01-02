@@ -29,7 +29,7 @@ class SynthDataset(Dataset):
         return self.num_exp
 
     def __getitem__(self, idx):
-        sample = self.data[idx,]
+        sample = self.data[idx]
         # Generate samples on the fly
         # cov = self.covs[cov_idx]
         # y_i = np.array( [ npr.multivariate_normal(np.zeros((3,)), cov) for j in range(self.num_exp) ] )
@@ -95,7 +95,7 @@ def gen_mvn():
     cov = np.array([[1,0.5],[0.5,1]])
     num_exp = int(1e4)
 
-    y =  np.array( [ npr.multivariate_normal(np.zeros((2,)), cov) for j in range(num_exp) ] )
+    y =  np.array( [ npr.multivariate_normal(np.ones((2,)), cov) for j in range(num_exp) ] )
     print(y.shape)
     np.save('data/syn_mvn.npy', y)
     
@@ -104,5 +104,5 @@ if __name__ == '__main__':
     y  = np.load('data/syn_mvn.npy')
     # plt.scatter(y[:,0], y[:,1])
     # plt.show()
-    sns.kdeplot(y[:,0], y[:,1], color="b", shade=True)
-    plt.show()
+    # sns.kdeplot(y[:,0], y[:,1], color="b", shade=True)
+    # plt.show()

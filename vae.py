@@ -27,7 +27,7 @@ class VAE(nn.Module):
         self.fc3 = nn.Linear(z_dim, h_dim)
         # decode
         self.fc41 = nn.Linear(h_dim, x_dim)
-        self.fc42 = nn.Linear(h_dim, x_dim*x_dim)
+        self.fc42 = nn.Linear(h_dim, x_dim)
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -67,16 +67,31 @@ class VAE(nn.Module):
         # decoder
         dec_mean, dec_cov = self.decode(z)
         kld_loss = self._kld_loss(enc_mean, enc_cov)
-        bce_loss = self._bce_loss(dec_mean, x)
+        nll_loss = self._nll_loss(dec_mean, dec_cov, x)
 
-        return kld_loss, bce_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
+        return kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
 
-    def sample(self):
+    def sample_z(self):
         h = Variable(torch.zeros(200, self.x_dim))
         # encoder 
         enc_mean, enc_cov = self.encode(h)
         z = self.reparameterize(enc_mean, enc_cov)
         return z.data.numpy()
+
+    def sample_x(self):
+        means = []
+        covs = []
+        
+        z = Variable(torch.zeros(100, self.z_dim).normal_())        
+        dec_mean, dec_cov = self.decode(z)
+        # print(dec_mean)
+        avg_mean = torch.mean(dec_mean, dim=0)
+        avg_cov  = torch.mean(dec_cov, dim=0).exp()
+        return avg_mean, avg_cov
+
+
+
+
 
     def _kld_loss(self, mu, logcov):
         # q||p, q~N(mu1,S1), p~N(mu2,S2), mu1=mu, S1=cov, mu2=0, S2=I
@@ -99,9 +114,12 @@ class VAE(nn.Module):
     #     print('KLD', KLD)
     #     return -0.5*torch.sum(KLD)
 
-    def _nll_loss(self, mean, cov, x): 
-        tmp = Variable( mean.size()[0]*torch.log(np.linalg.det(cov.data.numpy())))
-        return 0.5 * torch.sum(tmp + 1.0/std.pow(2) * (x-mean).t().mm(cov).inv().mm(x-mean))
+    def _nll_loss(self, mean, logcov, x): 
+        # 0.5 * log det (x) + mu s
+        NLL= 0.5 * torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2))
+        batch_size = mean.size()[0]
+        NLL /= batch_size
+        return NLL
 
 
     def _bce_loss(self, recon_x, x):

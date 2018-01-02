@@ -18,12 +18,13 @@ inference, prior, and generating models."""
 
 def train(epoch):
 	train_loss = 0
+
 	for batch_idx, (data, _) in enumerate(train_loader):
 
 		#transforming data
-		#data = Variable(data)
-		data = Variable(data.squeeze().transpose(0, 1))
-		data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
+		data = Variable(data)
+		#data = Variable(data.squeeze().transpose(0, 1))
+		#data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
 		#forward + backward + optimize
 		optimizer.zero_grad()
@@ -39,18 +40,19 @@ def train(epoch):
 
 		#printing
 		if batch_idx % print_every == 0:
-			print('Train Epoch: {} [{}/{} ({:.0f}%)]\t KLD Loss: {:.6f} \t NLL Loss: {:.6f}'.format(
+			print('Train Epoch: {} [{}/{} ({:.0f}%)]\t KLD Loss: {:.4f} \t NLL Loss: {:.4f} \t ELBO Loss: {:.4f}'.format(
 				epoch, batch_idx * len(data), len(train_loader.dataset),
 				100. * batch_idx / len(train_loader),
 				kld_loss.data[0] / batch_size,
-				nll_loss.data[0] / batch_size))
+				nll_loss.data[0] / batch_size,
+				loss.data[0] /batch_size))
 
-			sample = model.sample()
-			print(sample.shape)
-			sns.kdeplot(sample[:,0], sample[:,1], color="b", shade=True)
-			plt.show()
-			plt.pause(1e-6)
-			plt.gcf().clear()
+			sample = model.sample_z()
+			# sns.kdeplot(sample[:,0], sample[:,1], color="b", shade=True)
+
+			# plt.show()
+			# plt.pause(1e-6)
+			# plt.gcf().clear()
 			 # plt.imshow(sample.numpy())
 
 		train_loss += loss.data[0]
@@ -58,6 +60,10 @@ def train(epoch):
 
 	print('====> Epoch: {} Average loss: {:.4f}'.format(
 		epoch, train_loss / len(train_loader.dataset)))
+
+	# Eval p(x)
+	avg_mean, avg_cov = model.sample_x()
+	print(avg_mean, avg_cov)
 
 
 def test(epoch):
@@ -78,18 +84,18 @@ def test(epoch):
 	mean_kld_loss /= len(test_loader.dataset)
 	mean_nll_loss /= len(test_loader.dataset)
 
-	print('====> Test set loss: KLD Loss = {:.4f}, NLL Loss = {:.4f} '.format(
+	print('====> Test set loss: KLD Loss: {:.4f}, NLL Loss: {:.4f}'.format(
 		mean_kld_loss, mean_nll_loss))
 
 
 #hyperparameters
 x_dim = 2
 h_dim = 100
-z_dim = 2
+z_dim = 16
 n_layers =  1
 n_epochs = 100
 clip = 10
-learning_rate = 1e-2
+learning_rate = 1e-3
 batch_size = 16
 seed = 128
 print_every = 100
