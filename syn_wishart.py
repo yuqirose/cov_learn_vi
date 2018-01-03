@@ -92,7 +92,7 @@ def gen_inv_wishart():
 
 def gen_mvn():
     npr.seed(1)
-    cov = np.array([[1,0.5],[0.5,1]])
+    cov = np.array([[1,0],[0,1]])
     num_exp = int(1e4)
 
     y =  np.array( [ npr.multivariate_normal(np.ones((2,)), cov) for j in range(num_exp) ] )

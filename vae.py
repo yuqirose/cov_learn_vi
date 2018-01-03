@@ -57,7 +57,9 @@ class VAE(nn.Module):
     def decode(self, z):
         # p(x|z)
         h3 = self.relu(self.fc3(z))
-        return self.sigmoid(self.fc41(h3)), self.relu(self.fc42(h3))
+        dec_mean = self.sigmoid(self.fc41(h3))
+        dec_cov = self.relu(self.fc42(h3))
+        return dec_mean, dec_cov
 
     def forward(self, x):
         # encoder 
@@ -66,8 +68,9 @@ class VAE(nn.Module):
 
         # decoder
         dec_mean, dec_cov = self.decode(z)
+
         kld_loss = self._kld_loss(enc_mean, enc_cov)
-        nll_loss = self._nll_loss(dec_mean, dec_cov, x)
+        nll_loss = self._bce_loss(dec_mean, x)
 
         return kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
 
@@ -91,10 +94,8 @@ class VAE(nn.Module):
 
 
 
-
-
     def _kld_loss(self, mu, logcov):
-        # q||p, q~N(mu1,S1), p~N(mu2,S2), mu1=mu, S1=cov, mu2=0, S2=I
+        # q(z|x)||p(z), q~N(mu1,S1), p~N(mu2,S2), mu1=mu, S1=cov, mu2=0, S2=I
         # 0.5 * (log 1 - log prod(cov) -d + sum(cov) + mu^2)
         KLD = 0.5 * torch.sum( -logcov -1 + logcov.exp()+ mu.pow(2))
         # Normalise by same number of elements as in reconstruction

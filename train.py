@@ -2,6 +2,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+from torch import optim
 import torch.utils
 import torch.utils.data
 from torchvision import datasets, transforms
@@ -27,6 +28,7 @@ def train(epoch):
 		#data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
 		#forward + backward + optimize
+		optimizer = optim.Adam(model.parameters(), lr=1e-3)
 		optimizer.zero_grad()
 		kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov) = model(data)
 		
@@ -89,13 +91,13 @@ def test(epoch):
 
 
 #hyperparameters
-x_dim = 2
-h_dim = 100
+x_dim = 16 #2
+h_dim = 400
 z_dim = 16
 n_layers =  1
 n_epochs = 100
 clip = 10
-learning_rate = 1e-3
+learning_rate = 1e-4
 batch_size = 16
 seed = 128
 print_every = 100
@@ -111,11 +113,13 @@ plt.ion()
 # datasets.MNIST('data', train=True, download=True,
 # 	transform=transforms.ToTensor())
 train_loader = torch.utils.data.DataLoader(
-	SynthDataset(train=True),
+	datasets.MNIST('data', train=True, download=True,
+	transform=transforms.ToTensor()),
     batch_size=batch_size, shuffle=True)
 
 test_loader = torch.utils.data.DataLoader(
-    SynthDataset(train=False),
+    datasets.MNIST('data', train=True, download=True,
+	transform=transforms.ToTensor()),
     batch_size=batch_size, shuffle=True)
 
 
