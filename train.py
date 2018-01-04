@@ -64,8 +64,6 @@ def train(epoch):
 		epoch, train_loss / len(train_loader.dataset)))
 
 	# Eval p(x)
-	avg_mean, avg_cov = model.sample_x()
-	print(avg_mean, avg_cov)
 
 
 def test(epoch):
@@ -75,9 +73,9 @@ def test(epoch):
 	mean_kld_loss, mean_nll_loss = 0, 0
 	for i, (data, _) in enumerate(test_loader):                                            
 		
-		#data = Variable(data)
-		data = Variable(data.squeeze().transpose(0, 1))
-		data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
+		data = Variable(data)
+		# data = Variable(data.squeeze().transpose(0, 1))
+		# data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
 		kld_loss, nll_loss, _, _ = model(data)
 		mean_kld_loss += kld_loss.data[0]
@@ -91,13 +89,13 @@ def test(epoch):
 
 
 #hyperparameters
-x_dim = 16 #2
+x_dim = 2 #2
 h_dim = 400
 z_dim = 16
 n_layers =  1
 n_epochs = 100
 clip = 10
-learning_rate = 1e-4
+learning_rate = 1e-3
 batch_size = 16
 seed = 128
 print_every = 100
@@ -113,13 +111,11 @@ plt.ion()
 # datasets.MNIST('data', train=True, download=True,
 # 	transform=transforms.ToTensor())
 train_loader = torch.utils.data.DataLoader(
-	datasets.MNIST('data', train=True, download=True,
-	transform=transforms.ToTensor()),
+	SynthDataset(train=True),
     batch_size=batch_size, shuffle=True)
 
 test_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('data', train=True, download=True,
-	transform=transforms.ToTensor()),
+    SynthDataset(train=True),
     batch_size=batch_size, shuffle=True)
 
 

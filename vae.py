@@ -31,6 +31,7 @@ class VAE(nn.Module):
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
+        self.tanh = nn.Tanh()
 
     def encode(self, x):
         """ p(z|x)
@@ -55,10 +56,10 @@ class VAE(nn.Module):
             return mu
 
     def decode(self, z):
-        # p(x|z)
+        # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
-        dec_mean = self.sigmoid(self.fc41(h3))
-        dec_cov = self.relu(self.fc42(h3))
+        dec_mean = self.fc41(h3)
+        dec_cov = self.fc42(h3)
         return dec_mean, dec_cov
 
     def forward(self, x):
@@ -70,7 +71,7 @@ class VAE(nn.Module):
         dec_mean, dec_cov = self.decode(z)
 
         kld_loss = self._kld_loss(enc_mean, enc_cov)
-        nll_loss = self._bce_loss(dec_mean, x)
+        nll_loss = self._nll_loss(dec_mean, dec_cov, x)
 
         return kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
 
@@ -91,8 +92,6 @@ class VAE(nn.Module):
         avg_mean = torch.mean(dec_mean, dim=0)
         avg_cov  = torch.mean(dec_cov, dim=0).exp()
         return avg_mean, avg_cov
-
-
 
     def _kld_loss(self, mu, logcov):
         # q(z|x)||p(z), q~N(mu1,S1), p~N(mu2,S2), mu1=mu, S1=cov, mu2=0, S2=I
@@ -115,9 +114,15 @@ class VAE(nn.Module):
     #     print('KLD', KLD)
     #     return -0.5*torch.sum(KLD)
 
-    def _nll_loss(self, mean, logcov, x): 
+    def _nll_loss(self, mean, cov, x): 
         # 0.5 * log det (x) + mu s
-        NLL= 0.5 * torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2))
+        # take one sample, reconstruction loss
+        # print('mean', mean)
+        # print('x', x)
+        criterion = nn.MSELoss()
+
+        NLL = criterion(mean, x)
+        # NLL= 0.5 * torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2))
         batch_size = mean.size()[0]
         NLL /= batch_size
         return NLL
