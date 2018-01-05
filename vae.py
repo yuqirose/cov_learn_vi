@@ -75,10 +75,9 @@ class VAE(nn.Module):
 
         return kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
 
-    def sample_z(self):
-        h = Variable(torch.zeros(200, self.x_dim))
+    def sample_z(self, x):
         # encoder 
-        enc_mean, enc_cov = self.encode(h)
+        enc_mean, enc_cov = self.encode(x.view(-1, self.x_dim))
         z = self.reparameterize(enc_mean, enc_cov)
         return z.data.numpy()
 

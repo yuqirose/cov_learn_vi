@@ -17,7 +17,8 @@ class SynthDataset(Dataset):
         self.transform = transform
         self.num_exp = int(1e4)
 
-        self.data=np.load('data/syn_mvn.npy')
+        self.data=np.load('data/syn_mixture.npy')
+
 
         # Generate sample statistics
         # self.phi = np.array([[1,0.5,0],[0.5,1,0],[0,0,1]])
@@ -98,11 +99,38 @@ def gen_mvn():
     y =  np.array( [ npr.multivariate_normal(np.ones((2,)), cov) for j in range(num_exp) ] )
     print(y.shape)
     np.save('data/syn_mvn.npy', y)
-    
+
+def gen_mixture():
+    """ generate mixture of gaussian """
+    npr.seed(1)
+    num_exp = int(1e4)
+    x_dim = 2
+    z_dim = 2
+    mu1 = [5, 5,]
+    mu2 = [-5, -5]
+    theta = np.array([[2,1],[-1,-2]])
+    sigma = 0.1
+    u = npr.uniform((num_exp,))
+    z = np.zeros((num_exp, z_dim))
+    cov = np.zeros((z_dim, z_dim))
+    np.fill_diagonal(cov, 1)
+    sz = int(num_exp/2)
+    z[:sz, ]= npr.multivariate_normal(mu1, cov,sz)
+    z[sz:, ] = npr.multivariate_normal(mu2,cov,sz)
+    mu_x = theta@z.transpose()
+
+    x = np.zeros((num_exp, x_dim))
+    for i in range(num_exp):
+        x[i] = npr.multivariate_normal(mu_x[:,i], sigma*cov)
+    print(x.shape)
+    np.save('data/syn_mixture.npy', x)
+
 if __name__ == '__main__':
     # gen_mvn()
-    y  = np.load('data/syn_mvn.npy')
+    # gen_mixture()
+    y  = np.load('data/syn_mixture.npy')
+
     # plt.scatter(y[:,0], y[:,1])
     # plt.show()
-    # sns.kdeplot(y[:,0], y[:,1], color="b", shade=True)
-    # plt.show()
+    sns.kdeplot(y[:,0], y[:,1], color="b", shade=True)
+    plt.show()
