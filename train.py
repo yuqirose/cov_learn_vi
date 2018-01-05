@@ -50,11 +50,16 @@ def train(epoch):
 				loss.data[0] /batch_size))
 
 			sample = model.sample_z()
+
 			# sns.kdeplot(sample[:,0], sample[:,1], color="b", shade=True)
 
-			# plt.show()
-			# plt.pause(1e-6)
-			# plt.gcf().clear()
+			# plot the data and reconstruction
+			f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
+			sns.kdeplot(data.data.numpy()[:,0], data.data.numpy()[:,1], color="r", shade=True, ax=ax1)
+			sns.kdeplot(dec_mean.data.numpy()[:,0], dec_mean.data.numpy()[:,1], color="b", shade=True, ax=ax2)
+			plt.show()
+			plt.pause(1e-6)
+			plt.gcf().clear()
 			 # plt.imshow(sample.numpy())
 
 		train_loss += loss.data[0]

@@ -10,7 +10,8 @@ from torchvision.utils import save_image
 import numpy as np
 
 
-class VAE(nn.Module):
+class DGP(nn.Module):
+    """deep gaussian process """
     def __init__(self, x_dim, h_dim, z_dim):
         super(VAE, self).__init__()
 
@@ -102,6 +103,17 @@ class VAE(nn.Module):
         KLD /= batch_size
         return KLD
 
+    # def _kld_loss(self, mu, logcov):
+    #     # 0.5 * log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)
+    #     cov = logcov.exp()
+    #     prior_cov = prior_cov.exp()
+    #     cov_inv = batch_inverse(cov)
+
+    #     KLD = batch_trace(logcov) - batch_trace(prior_cov)
+    #     KLD = KLD + batch_trace(torch.bmm(cov_inv,prior_cov))
+    #     KLD = KLD + torch.bmm(torch.bmm(mu.unsqueeze(1), cov_inv), mu.unsqueeze(2))
+    #     print('KLD', KLD)
+    #     return -0.5*torch.sum(KLD)
 
     def _nll_loss(self, mean, cov, x): 
         # 0.5 * log det (x) + mu s
@@ -122,7 +134,18 @@ class VAE(nn.Module):
         return BCE
 
 
+def batch_trace(X):
+    val = Variable(torch.zeros(X.size()[0],1))
+    for i in range(X.size()[0]):
+        trace_val = np.trace(X[i,:,:].data.numpy()).astype(float)
+        val[i] = trace_val
+    return val
 
+def batch_inverse(X):
+    val = Variable(torch.zeros(X.size()))
+    for i in range(X.size()[0]):
+        val[i,:,:] =X[i,:,:].inverse()
+    return val
 
 
 
