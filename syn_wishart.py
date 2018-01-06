@@ -102,7 +102,7 @@ def gen_mvn():
 
 def gen_mixture():
     """ generate mixture of gaussian """
-    npr.seed(1)
+    npr.seed(0)
     num_exp = int(1e4)
     x_dim = 2
     z_dim = 2
@@ -127,7 +127,7 @@ def gen_mixture():
 
 if __name__ == '__main__':
     # gen_mvn()
-    # gen_mixture()
+    gen_mixture()
     y  = np.load('data/syn_mixture.npy')
 
     # plt.scatter(y[:,0], y[:,1])
