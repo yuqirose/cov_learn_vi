@@ -121,9 +121,10 @@ def gen_mixture():
 
     x = np.zeros((num_exp, x_dim))
     for i in range(num_exp):
-        x[i] = npr.multivariate_normal(mu_x[:,i], sigma*cov)
+        x[i,:] = npr.multivariate_normal(mu_x[:,i], sigma*cov)
     print(x.shape)
-    np.save('data/syn_mixture.npy', x)
+  
+    # np.save('data/syn_mixture.npy', x)
 
 if __name__ == '__main__':
     # gen_mvn()

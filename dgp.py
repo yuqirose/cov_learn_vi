@@ -24,25 +24,34 @@ class DGP(nn.Module):
         self.fc21 = nn.Linear(h_dim, z_dim)
         self.fc22 = nn.Linear(h_dim, z_dim)
         self.fc23 = nn.Linear(h_dim, z_dim)
+        self.fc24 = nn.Linear(h_dim, z_dim)
         # transform
         self.fc3 = nn.Linear(z_dim, h_dim)
         # decode
         self.fc41 = nn.Linear(h_dim, x_dim)
         self.fc42 = nn.Linear(h_dim, x_dim)
+        self.fc43 = nn.Linear(h_dim, x_dim)
+        self.fc44 = nn.Linear(h_dim, x_dim)
+
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
 
-    def encode(self, x):
-        """ p(z|x)
-            C = D + uu'
-        """
+    def encode_1(self, x):
         h1 = self.relu(self.fc0(x))
         enc_mean = self.fc21(h1)
         enc_cov = self.fc22(h1)
         #enc_cov_2 = self.fc23(h1)
         return enc_mean, enc_cov
+
+    def encode_2(self, x):
+        # adding GP prior on xi
+        h2 = self.relu(self.fc1(enc_mean))
+        enc_mean = self.fc23(h2)
+        enc_cov = self.fc24(h2)
+        return enc_mean, enc_cov
+
 
     def reparameterize(self, mu, logcov):
         #  mu + R*esp (C = R'R)
@@ -56,7 +65,15 @@ class DGP(nn.Module):
         else:
             return mu
 
-    def decode(self, z):
+    def decode_1(self, z):
+        # p(f|xi)~ N(f(z), \sigma )
+        h3 = self.relu(self.fc3(z))
+        dec_mean = self.fc41(h3)
+        dec_cov = self.fc42(h3)
+        return dec_mean, dec_cov
+
+
+    def decode_2(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
         dec_mean = self.fc41(h3)
@@ -64,11 +81,17 @@ class DGP(nn.Module):
         return dec_mean, dec_cov
 
     def forward(self, x):
-        # encoder 
-        enc_mean, enc_cov = self.encode(x.view(-1, self.x_dim))
-        z = self.reparameterize(enc_mean, enc_cov)
+        # p (xi)
+        xi_mean, xi_cov = self.encode_1(x.view(-1, self.x_dim))
+        xi = self.reparameterize(xi_mean, xi_cov)
+        
+        # p(f|xi)
+        f_mean, f_cov = self.encode_2(xi)
+        f = self.reparametrizer(f_mean, )
 
-        # decoder
+        # p(z|f)
+        z = self.reparametrize(f_mean, f_cov)
+        # p(x|z)
         dec_mean, dec_cov = self.decode(z)
 
         kld_loss = self._kld_loss(enc_mean, enc_cov)
