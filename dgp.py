@@ -10,47 +10,33 @@ from torchvision.utils import save_image
 import numpy as np
 
 
-class Cholesky(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, a):
-        l = torch.potrf(a, False)
-        ctx.save_for_backward(l)
-        return l
-    @staticmethod
-    def backward(ctx, grad_output):
-        l, = ctx.saved_variables
-        # Gradient is l^{-H} @ ((l^{H} @ grad) * (tril(ones)-1/2*eye)) @ l^{-1}
-        # TODO: ideally, this should use some form of solve triangular instead of inverse...
-        linv =  l.inverse()
-        
-        inner = torch.tril(torch.mm(l.t(),grad_output))*torch.tril(1.0-Variable(l.data.new(l.size(1)).fill_(0.5).diag()))
-        s = torch.mm(linv.t(), torch.mm(inner, linv))
-        # could re-symmetrise 
-        #s = (s+s.t())/2.0
-        
-        return s
-
 
 class DGP(nn.Module):
     """deep gaussian process """
     def __init__(self, x_dim, h_dim, z_dim):
-        super(VAE, self).__init__()
+        super(DGP, self).__init__()
 
         self.x_dim = x_dim
         self.h_dim = h_dim
         self.z_dim = z_dim
         # feature
-        self.fc0 = nn.Linear(x_dim, h_dim)
+        self.fc1 = nn.Linear(x_dim, h_dim)
         # encode
+        self.fc11 = nn.Linear(h_dim, z_dim)
+        self.fc12 = nn.Linear(h_dim, z_dim)
+        self.fc13 = nn.Linear(h_dim, z_dim)
+         
+        # encode 2
+        self.fc2 = nn.Linear(z_dim, h_dim)
         self.fc21 = nn.Linear(h_dim, z_dim)
         self.fc22 = nn.Linear(h_dim, z_dim)
-        self.fc23 = nn.Linear(h_dim, z_dim)
-        self.fc24 = nn.Linear(h_dim, z_dim)
+
+
         # transform
         self.fc3 = nn.Linear(z_dim, h_dim)
         # decode
-        self.fc41 = nn.Linear(h_dim, x_dim)
-        self.fc42 = nn.Linear(h_dim, x_dim)
+        self.fc31 = nn.Linear(h_dim, x_dim)
+        self.fc32 = nn.Linear(h_dim, x_dim)
 
 
         self.relu = nn.ReLU()
@@ -58,42 +44,41 @@ class DGP(nn.Module):
         self.tanh = nn.Tanh()
 
     def encode_1(self, x):
-        h1 = self.relu(self.fc0(x))
-        enc_mean = self.fc21(h1)
-        enc_cov = self.fc22(h1)
-        #enc_cov_2 = self.fc23(h1)
-        return enc_mean, enc_cov
+        h1 = self.relu(self.fc1(x))
+        enc_mean = self.fc11(h1)
+        enc_cov_1 = self.fc12(h1)
+        enc_cov_2 = self.fc13(h1)
+        return enc_mean, enc_cov_1, enc_cov_2
 
     def encode_2(self, x):
         # adding GP prior on xi
-        h2 = self.relu(self.fc1(enc_mean))
-        enc_mean = self.fc23(h2)
-        enc_cov = self.fc24(h2)
+        h2 = self.relu(self.fc2(x))
+        enc_mean = self.fc21(h2)
+        enc_cov = self.fc21(h2)
         return enc_mean, enc_cov
 
 
     def reparameterize_nm(self, mu, logcov):
         #  mu + R*esp (C = R'R)
         if self.training:
-            cov = logcov.exp_() + u.mul(u.transpose()) # rank-1 approximation
-            L = Cholesky(cov)
+            cov = logcov.exp_() 
             eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
-            # z = cov.mul(eps).add_(mu)
-            # eps_view = eps.unsqueeze(2)
-            z = L.bmm(eps_view).squeeze(2).add(mu)
+            z = cov.mul(eps).add_(mu)
             return z
         else:
             return mu
 
-    def reparameterize_gp(self, mu, logcov):
+    def reparameterize_gp(self, mu, logcov, u):
         #  sample from gaussian process 
         #  f = K^{-1} + L\eps \eps ~ N(0,I)
         if self.training:
-            cov = logcov.exp_()
-            # eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
-            # z = cov.mul(eps).add_(mu) # parametrize the 
+            cov = torch.diag(logcov.exp_())+ torch.bmm(u.unsqueeze(2), u.unsqueeze(1)) # rank-1 approximation
+            A_LU, pivots = torch.btrifact(cov.data)
+            P, a_L, a_U = torch.btriunpack(A_LU, pivots)
+            eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
             eps_view = eps.unsqueeze(2)
-            z = cov.bmm(eps_view).squeeze(2).add(mu)
+            L = Variable(a_L)
+            z = L.bmm(eps_view).squeeze(2).add(mu)
             return z
         else:
             return mu
@@ -103,31 +88,33 @@ class DGP(nn.Module):
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
-        dec_mean = self.fc41(h3)
-        dec_cov = self.fc42(h3)
+        dec_mean = self.fc31(h3)
+        dec_cov = self.fc32(h3)
         return dec_mean, dec_cov
 
     def forward(self, x):
         # r(f|x)
-        f_mean, f_cov = self.encode_1(x.view(-1, self.x_dim))
-        f = self.reparametrizer_gp(f_mean, f_cov)
+        f_mean, f_cov_1, f_cov_2  = self.encode_1(x.view(-1, self.x_dim))
+        f = self.reparameterize_gp(f_mean, f_cov_1, f_cov_2)
 
         # q(z|f)
         z_mean, z_cov = self.encode_2(f)
-        z = self.reparametrize_nm(f_mean, f_cov)
+        z = self.reparameterize_nm(z_mean, z_cov)
         # p(x|z)
-        dec_mean, dec_cov = self.decode(z)
+        x_mean, x_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(enc_mean, enc_cov)
-        nll_loss = self._nll_loss(dec_mean, dec_cov, x)
+        kld_loss = self._kld_loss(z_mean, z_cov)
+        nll_loss = self._nll_loss(x_mean, x_cov, x)
 
-        return kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
+        return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
 
-    def sample_z(self):
-        h = Variable(torch.zeros(200, self.x_dim))
+    def sample_z(self, x):
         # encoder 
-        enc_mean, enc_cov = self.encode(h)
-        z = self.reparameterize(enc_mean, enc_cov)
+        f_mean, f_cov_1, f_cov_2 = self.encode_1(x)
+        f = self.reparameterize_gp(f_mean, f_cov_1, f_cov_2)
+
+        z_mean, z_cov = self.encode_2(f)
+        z = self.reparameterize_nm(z_mean, z_cov)
         return z.data.numpy()
 
     def sample_x(self):
@@ -193,6 +180,8 @@ def batch_inverse(X):
     for i in range(X.size()[0]):
         val[i,:,:] =X[i,:,:].inverse()
     return val
+
+
 
 
 

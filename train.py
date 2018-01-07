@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt 
 import seaborn as sns
 from vae import VAE
+from dgp import DGP
 from syn_wishart import SynthDataset
 
 """implementation of the Variational Recurrent
@@ -97,7 +98,7 @@ def test(epoch):
 
 #hyperparameters
 x_dim = 2 #2
-h_dim = 400
+h_dim = 100
 z_dim = 2
 n_layers =  1
 n_epochs = 100
@@ -128,7 +129,7 @@ test_loader = torch.utils.data.DataLoader(
 
 
 
-model = VAE(x_dim, h_dim, z_dim)
+model = DGP(x_dim, h_dim, z_dim)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 for epoch in range(1, n_epochs + 1):

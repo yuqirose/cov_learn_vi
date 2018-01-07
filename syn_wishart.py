@@ -17,7 +17,7 @@ class SynthDataset(Dataset):
         self.transform = transform
         self.num_exp = int(1e4)
 
-        self.data=np.load('data/syn_mixture.npy')
+        self.data=np.load('data/syn_mvn.npy')
 
 
         # Generate sample statistics
