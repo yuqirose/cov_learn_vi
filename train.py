@@ -66,11 +66,11 @@ def train(epoch):
     print('====> Epoch: {} Average loss: {:.4f}'.format(
         epoch, train_loss / len(train_loader.dataset)))
 
-    sample = model.sample_z(data)
-    sns.kdeplot(sample[:,0], sample[:,1], color="b", shade=True)
-    plt.show()
-    plt.pause(1e-4)
-    plt.gcf().clear()
+    # sample = model.sample_z(data)
+    # sns.kdeplot(sample[:,0], sample[:,1], color="b", shade=True)
+    # plt.show()
+    # plt.pause(1e-4)
+    # plt.gcf().clear()
 
 
 
@@ -98,7 +98,7 @@ def test(epoch):
 
 #hyperparameters
 x_dim = 2 #2
-h_dim = 100
+h_dim = 600
 z_dim = 2
 n_layers =  1
 n_epochs = 100
@@ -129,7 +129,7 @@ test_loader = torch.utils.data.DataLoader(
 
 
 
-model = DGP(x_dim, h_dim, z_dim)
+model = VAE(x_dim, h_dim, z_dim)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 for epoch in range(1, n_epochs + 1):

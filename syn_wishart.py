@@ -17,7 +17,7 @@ class SynthDataset(Dataset):
         self.transform = transform
         self.num_exp = int(1e4)
 
-        self.data=np.load('data/syn_mvn.npy')
+        self.data=np.load('data/syn_mixture.npy')
 
 
         # Generate sample statistics
@@ -89,7 +89,7 @@ def gen_inv_wishart():
     print(len(y))
     print(y[0].shape)
 
-    np.save('data/syn_wishart.npy', y)
+    np.save('data/syn_mixture.npy', y)
 
 def gen_mvn():
     npr.seed(1)
@@ -124,7 +124,7 @@ def gen_mixture():
         x[i,:] = npr.multivariate_normal(mu_x[:,i], sigma*cov)
     print(x.shape)
   
-    # np.save('data/syn_mixture.npy', x)
+    np.save('data/syn_mixture.npy', x)
 
 if __name__ == '__main__':
     # gen_mvn()

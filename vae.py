@@ -22,7 +22,6 @@ class VAE(nn.Module):
         # encode
         self.fc21 = nn.Linear(h_dim, z_dim)
         self.fc22 = nn.Linear(h_dim, z_dim)
-        self.fc23 = nn.Linear(h_dim, z_dim)
         # transform
         self.fc3 = nn.Linear(z_dim, h_dim)
         # decode
@@ -58,8 +57,8 @@ class VAE(nn.Module):
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
-        dec_mean = self.fc41(h3)
-        dec_cov = self.fc42(h3)
+        dec_mean = self.sigmoid(self.fc41(h3))        
+        dec_cov = self.sigmoid(self.fc42(h3))
         return dec_mean, dec_cov
 
     def forward(self, x):
