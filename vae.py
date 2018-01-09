@@ -45,7 +45,7 @@ class VAE(nn.Module):
     def reparameterize(self, mu, logcov):
         #  mu + R*esp (C = R'R)
         if self.training:
-            cov = logcov.exp_()
+            cov = logcov.div(2.0).exp_()
             eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
             z = cov.mul(eps).add_(mu)
             # eps_view = eps.unsqueeze(2)

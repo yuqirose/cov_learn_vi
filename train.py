@@ -125,9 +125,9 @@ if data_set == "mnist":
         batch_size=batch_size, shuffle=True)
 
     test_loader = torch.utils.data.DataLoader(
-        SynthDataset(train=True),
+        SynthDataset(train=False),
         batch_size=batch_size, shuffle=True)
-    
+
 elif data_set == "synth":   
     train_loader = torch.utils.data.DataLoader(
        datasets.MNIST('data', train=True, download=True,
@@ -135,7 +135,7 @@ elif data_set == "synth":
         batch_size=batch_size, shuffle=True)
 
     test_loader = torch.utils.data.DataLoader(
-       datasets.MNIST('data', train=True, download=True,
+       datasets.MNIST('data', train=False, download=True,
   transform=transforms.ToTensor()),
         batch_size=batch_size, shuffle=True)
 
