@@ -109,7 +109,7 @@ seed = 128
 print_every = 100
 save_every = 10
 is_plot=False
-
+data_set = "mnist"
 
 #manual seed
 torch.manual_seed(seed)
@@ -119,13 +119,25 @@ plt.ion()
 # SynthDataset(train=True)
 # datasets.MNIST('data', train=True, download=True,
 #   transform=transforms.ToTensor())
-train_loader = torch.utils.data.DataLoader(
-    SynthDataset(train=True),
-    batch_size=batch_size, shuffle=True)
+if data_set == "mnist":
+    train_loader = torch.utils.data.DataLoader(
+        SynthDataset(train=True),
+        batch_size=batch_size, shuffle=True)
 
-test_loader = torch.utils.data.DataLoader(
-    SynthDataset(train=True),
-    batch_size=batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(
+        SynthDataset(train=True),
+        batch_size=batch_size, shuffle=True)
+    
+elif data_set == "synth":   
+    train_loader = torch.utils.data.DataLoader(
+       datasets.MNIST('data', train=True, download=True,
+  transform=transforms.ToTensor()),
+        batch_size=batch_size, shuffle=True)
+
+    test_loader = torch.utils.data.DataLoader(
+       datasets.MNIST('data', train=True, download=True,
+  transform=transforms.ToTensor()),
+        batch_size=batch_size, shuffle=True)
 
 
 
