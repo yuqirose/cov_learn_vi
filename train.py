@@ -12,6 +12,9 @@ import seaborn as sns
 from vae import VAE
 from dgp import DGP
 from syn_wishart import SynthDataset
+import visdom 
+
+vis = visdom.Visdom()
 
 """implementation of the Variational Recurrent
 Neural Network (VRNN) from https://arxiv.org/abs/1506.02216
@@ -119,7 +122,7 @@ plt.ion()
 # SynthDataset(train=True)
 # datasets.MNIST('data', train=True, download=True,
 #   transform=transforms.ToTensor())
-if data_set == "mnist":
+if data_set == "synth":
     train_loader = torch.utils.data.DataLoader(
         SynthDataset(train=True),
         batch_size=batch_size, shuffle=True)
@@ -128,7 +131,7 @@ if data_set == "mnist":
         SynthDataset(train=False),
         batch_size=batch_size, shuffle=True)
 
-elif data_set == "synth":   
+elif data_set == "mnist":   
     train_loader = torch.utils.data.DataLoader(
        datasets.MNIST('data', train=True, download=True,
   transform=transforms.ToTensor()),
@@ -151,7 +154,7 @@ for epoch in range(1, n_epochs + 1):
     test(epoch)
 
     #saving model
-    if epoch % save_every == 1:
+    if epoch % save_every == 10:
         fn = 'saves/vae_state_dict_'+str(epoch)+'.pth'
         torch.save(model.state_dict(), fn)
         print('Saved model to '+fn)
