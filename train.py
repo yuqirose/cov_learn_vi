@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import argparse
 import torch
 import torch.nn as nn
 from torch import optim
@@ -7,6 +8,7 @@ import torch.utils
 import torch.utils.data
 from torchvision import datasets, transforms
 from torch.autograd import Variable
+from torchvision.utils import save_image
 import matplotlib.pyplot as plt 
 import seaborn as sns
 from vae import VAE
@@ -25,13 +27,11 @@ def train(epoch):
 
         #transforming data
         data = Variable(data)
-        #data = Variable(data.squeeze().transpose(0, 1))
-        #data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
+        # print('data shape', data[0,].shape)
 
         #forward + backward + optimize
-        optimizer = optim.Adam(model.parameters(), lr=1e-3)
         optimizer.zero_grad()
-        kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov) = model(data)
+        kld_loss, nll_loss, (enc_mean, enc_cov), (dec_mean, dec_cov) = model(data, 'bce')
         
         # loss
         loss = kld_loss + nll_loss
@@ -42,23 +42,13 @@ def train(epoch):
         nn.utils.clip_grad_norm(model.parameters(), clip)
 
         #printing
-        if batch_idx % print_every == 0:
+        if batch_idx % args.print_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\t KLD Loss: {:.4f} \t NLL Loss: {:.4f} \t ELBO Loss: {:.4f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader),
-                kld_loss.data[0] / batch_size,
-                nll_loss.data[0] / batch_size,
-                loss.data[0] /batch_size))
-
-            # plot the data and reconstruction
-            if is_plot:
-                f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
-                sns.kdeplot(data.data.numpy()[:,0], data.data.numpy()[:,1], color="r", shade=True, ax=ax1)
-                sns.kdeplot(dec_mean.data.numpy()[:,0], dec_mean.data.numpy()[:,1], color="b", shade=True, ax=ax2)
-                plt.show()
-                plt.pause(1e-6)
-                plt.gcf().clear()
-                 # plt.imshow(sample.numpy())
+                kld_loss.data[0] / args.batch_size,
+                nll_loss.data[0] / args.batch_size,
+                loss.data[0] /args.batch_size))
 
         train_loss += loss.data[0]
 
@@ -66,13 +56,22 @@ def train(epoch):
     print('====> Epoch: {} Average loss: {:.4f}'.format(
         epoch, train_loss / len(train_loader.dataset)))
 
-    # sample = model.sample_z(data)
-    # sns.kdeplot(sample[:,0], sample[:,1], color="b", shade=True)
-    # plt.show()
-    # plt.pause(1e-4)
-    # plt.gcf().clear()
+   # plot the data and reconstruction
+    if is_plot:
+        # f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
+        # sns.kdeplot(data.data.numpy()[:,0], data.data.numpy()[:,1], color="r", shade=True, ax=ax1)
+        # sns.kdeplot(dec_mean.data.numpy()[:,0], dec_mean.data.numpy()[:,1], color="b", shade=True, ax=ax2)
+        plt.subplot(121)
+        plt.imshow(data.data.numpy()[0,].squeeze())
+        plt.subplot(122)
+        plt.imshow(dec_mean.view(-1,28,28).data.numpy()[0,].squeeze())
 
+        plt.show()
+        plt.pause(1e-6)
+        plt.gcf().clear()
 
+        # sample = model.sample_z(data)    
+        # plt.imshow(sample)
 
 def test(epoch):
     """uses test data to evaluate 
@@ -85,7 +84,7 @@ def test(epoch):
         # data = Variable(data.squeeze().transpose(0, 1))
         # data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
-        kld_loss, nll_loss, _, _ = model(data)
+        kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov) = model(data, 'bce')
         mean_kld_loss += kld_loss.data[0]
         mean_nll_loss += nll_loss.data[0]
 
@@ -95,31 +94,47 @@ def test(epoch):
     print('====> Test set loss: KLD Loss: {:.4f}, NLL Loss: {:.4f}'.format(
         mean_kld_loss, mean_nll_loss))
 
+  # log-odds
+    ll = torch.distributions.Normal(dec_mean, 1.0)
+    nll = -torch.sum(ll.log_prob(data.view(-1, x_dim)))/(args.batch_size)
+    print('test log likelihood', nll.data)
 
 #hyperparameters
-x_dim = 2 #2
-h_dim = 600
-z_dim = 2
+x_dim = 28*28 
+h_dim = 100
+z_dim = 20
 n_layers =  1
-n_epochs = 100
-clip = 10
-learning_rate = 1e-3
-batch_size = 16
-seed = 128
-print_every = 100
-save_every = 10
+clip = 1.10
 is_plot=False
 data_set = "mnist"
 
-#manual seed
-torch.manual_seed(seed)
-plt.ion()
+
+parser = argparse.ArgumentParser(description='VAE MNIST Example')
+parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default: 128)')
+parser.add_argument('--epochs', type=int, default=10, metavar='N',
+                    help='number of epochs to train (default: 10)')
+parser.add_argument('--no-cuda', action='store_true', default=False,
+                    help='enables CUDA training')
+parser.add_argument('--seed', type=int, default=1, metavar='S',
+                    help='random seed (default: 1)')
+parser.add_argument('--print-interval', type=int, default=100, metavar='N',
+                    help='how many batches to wait before printing training status')
+parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                    help='how many batches to wait before logging training status')
+args = parser.parse_args()
+args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+
+torch.manual_seed(args.seed)
+if args.cuda:
+    torch.cuda.manual_seed(args.seed)
 
 #init model + optimizer + datasets
 # SynthDataset(train=True)
 # datasets.MNIST('data', train=True, download=True,
 #   transform=transforms.ToTensor())
-if data_set == "mnist":
+if data_set == "synth":
     train_loader = torch.utils.data.DataLoader(
         SynthDataset(train=True),
         batch_size=batch_size, shuffle=True)
@@ -128,30 +143,33 @@ if data_set == "mnist":
         SynthDataset(train=False),
         batch_size=batch_size, shuffle=True)
 
-elif data_set == "synth":   
+elif data_set == "mnist":   
     train_loader = torch.utils.data.DataLoader(
        datasets.MNIST('data', train=True, download=True,
   transform=transforms.ToTensor()),
-        batch_size=batch_size, shuffle=True)
+        batch_size=args.batch_size, shuffle=True)
 
     test_loader = torch.utils.data.DataLoader(
        datasets.MNIST('data', train=False, download=True,
   transform=transforms.ToTensor()),
-        batch_size=batch_size, shuffle=True)
+        batch_size=args.batch_size, shuffle=True)
 
 
 
 model = VAE(x_dim, h_dim, z_dim)
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-for epoch in range(1, n_epochs + 1):
+for epoch in range(1, args.epochs + 1):
     
     #training + testing
     train(epoch)
     test(epoch)
 
+    # save_image(sample.data.view(64, 1, 28, 28),
+        # 'results/sample_' + str(epoch) + '.png')
+
     #saving model
-    if epoch % save_every == 1:
+    if epoch % args.log_interval == 1:
         fn = 'saves/vae_state_dict_'+str(epoch)+'.pth'
         torch.save(model.state_dict(), fn)
         print('Saved model to '+fn)

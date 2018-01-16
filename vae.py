@@ -39,17 +39,14 @@ class VAE(nn.Module):
         h1 = self.relu(self.fc0(x))
         enc_mean = self.fc21(h1)
         enc_cov = self.fc22(h1)
-        #enc_cov_2 = self.fc23(h1)
         return enc_mean, enc_cov
 
     def reparameterize(self, mu, logcov):
         #  mu + R*esp (C = R'R)
         if self.training:
-            cov = logcov.div(2.0).exp_()
+            cov = logcov.mul(0.5).exp_()
             eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
             z = cov.mul(eps).add_(mu)
-            # eps_view = eps.unsqueeze(2)
-            # z = cov.bmm(eps_view).squeeze(2).add(mu)
             return z
         else:
             return mu
@@ -57,11 +54,11 @@ class VAE(nn.Module):
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
-        dec_mean = self.sigmoid(self.fc41(h3))        
+        dec_mean = self.sigmoid(self.fc41(h3))
         dec_cov = self.sigmoid(self.fc42(h3))
         return dec_mean, dec_cov
 
-    def forward(self, x):
+    def forward(self, x, dist):
         # encoder 
         enc_mean, enc_cov = self.encode(x.view(-1, self.x_dim))
         z = self.reparameterize(enc_mean, enc_cov)
@@ -70,9 +67,12 @@ class VAE(nn.Module):
         dec_mean, dec_cov = self.decode(z)
 
         kld_loss = self._kld_loss(enc_mean, enc_cov)
-        nll_loss = self._nll_loss(dec_mean, dec_cov, x)
+        if dist == "gauss":
+            nll_loss = self._nll_loss(dec_mean, x)
+        elif dist == "bce":
+            nll_loss = self._bce_loss(dec_mean, x)
 
-        return kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov)
+        return kld_loss, nll_loss, (enc_mean, enc_cov), (dec_mean, dec_cov)
 
     def sample_z(self, x):
         # encoder 
@@ -84,12 +84,9 @@ class VAE(nn.Module):
         means = []
         covs = []
         
-        z = Variable(torch.zeros(100, self.z_dim).normal_())        
+        z = Variable(torch.zeros(128, self.z_dim).normal_())        
         dec_mean, dec_cov = self.decode(z)
-        # print(dec_mean)
-        avg_mean = torch.mean(dec_mean, dim=0)
-        avg_cov  = torch.mean(dec_cov, dim=0).exp()
-        return avg_mean, avg_cov
+        return dec_mean.data.view(dec_mean.size()[0], 1, 28, 28),
 
     def _kld_loss(self, mu, logcov):
         # q(z|x)||p(z), q~N(mu1,S1), p~N(mu2,S2), mu1=mu, S1=cov, mu2=0, S2=I
@@ -97,11 +94,11 @@ class VAE(nn.Module):
         KLD = 0.5 * torch.sum( -logcov -1 + logcov.exp()+ mu.pow(2))
         # Normalise by same number of elements as in reconstruction
         batch_size = mu.size()[0]
-        KLD /= batch_size
+        KLD /= batch_size * self.x_dim
         return KLD
 
 
-    def _nll_loss(self, mean, cov, x): 
+    def _nll_loss(self, mean, x): 
         # 0.5 * log det (x) + mu s
         # take one sample, reconstruction loss
         # print('mean', mean)
