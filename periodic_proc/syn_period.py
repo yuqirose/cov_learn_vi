@@ -6,8 +6,9 @@ from torch.utils.data import Dataset
 import torch
 import matplotlib.pyplot as plt 
 import seaborn as sns
-
-
+import sys
+sys.path.append("../")
+from util.matutil import *
 
 
 class SynthDataset(Dataset):
@@ -64,13 +65,20 @@ def gen_periodproc():
         for n in range(N):
             y[m,n,:]=np.random.multivariate_normal(mu[:,n],Sigma[:,:,n])
     np.save('data/syn_periodproc.npy', (t,y))
-#     return t,y
+    
+    return mu.T,np.rollaxis(Sigma,-1) # return the truth
     
 if __name__ == '__main__':
-    gen_periodproc()
+    mu,Sigma = gen_periodproc()
     t,y  = np.load('data/syn_periodproc.npy')
-
+    
+    plt.figure(1)
+    plt.plot(t, vechx(Sigma))
     plt.plot(t, y[1,:,:],'*')
-    plt.show()
-#     sns.tsplot(y[1,:,:].transpose())
 #     plt.show()
+    plt.savefig('data/syn_periodproc.png')
+    
+    plt.figure(2)
+    sns.tsplot(y)
+#     plt.show()
+    plt.savefig('data/syn_periodproc_ts.png')

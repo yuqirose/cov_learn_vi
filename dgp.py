@@ -84,7 +84,6 @@ class DGP(nn.Module):
             return mu
 
 
-
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
