@@ -2,6 +2,9 @@
 Plot funcs 
 Jan, 2018 Rose Yu @Caltech 
 """
+import matplotlib.pyplot as plt 
+import seaborn as sns
+from util.matutil import ivech2x, vechx
 
 def plot_img():
     """ 
@@ -30,23 +33,27 @@ def plot_kde():
     plt.pause(1e-6)
     plt.gcf().clear()
 
-def plot_ts():
+def plot_ts(data, enc, dec):
     """
     plot time series with uncertainty
     """
+    enc_mean, enc_cov = enc
+    dec_mean, dec_cov = dec
+
+    batch_size = enc_mean.size()[0]
+    N = 200
+    D = 2
+
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
     # plot reconstruction
     plt.axes(ax1)
     sns.tsplot(data.view(batch_size,N,-1).data.numpy())
     # plot latent variables
     plt.axes(ax2)
-#                 sample_L = model.sample_z(data).reshape((batch_size,N,-1))
+
+    # sample_L = model.sample_z(data).reshape((batch_size,N,-1))
     sample_L = enc_mean.view(batch_size,N,-1).data.numpy()
     sample_Sigma = ivech2x(sample_L)
     sample_vechSigma = vechx(sample_Sigma.reshape((-1,D,D))).reshape((batch_size,N,-1))
     sns.tsplot(sample_vechSigma)
-    
-    plt.show()
-    plt.pause(1e-4)
-    plt.gcf().clear()
 

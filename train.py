@@ -9,12 +9,11 @@ import torch.utils.data
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 from torchvision.utils import save_image
-import matplotlib.pyplot as plt 
-import seaborn as sns
 from vae import VAE
 from dgp import DGP
 from reader import SynthDataset
 from plot import plot_ts
+import matplotlib.pyplot as plt 
 import visdom 
 
 
@@ -61,7 +60,11 @@ def train(epoch):
 
    # plot the data and reconstruction
     if is_plot:
-        plot_img()
+        plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
+        plt.show(block=False)
+        plt.pause(1e-6)
+        plt.close()
+
 
 def test(epoch):
     """uses test data to evaluate 
@@ -88,9 +91,6 @@ def test(epoch):
     ll = torch.distributions.Normal(dec_mean, 1.0)
     nll = -torch.sum(ll.log_prob(data.view(-1, x_dim)))/(args.batch_size)
     print('test log likelihood', nll.data)
-
-
-
 
 
 
