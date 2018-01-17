@@ -10,6 +10,11 @@ import sys
 sys.path.append("../")
 from util.matutil import *
 
+"""
+Modified by
+Shiwei Lan @ CalTech, 2018
+version 1.0
+"""
 
 class SynthDataset(Dataset):
     def __init__(self, train=True, transform=None):
@@ -47,7 +52,7 @@ class SynthDataset(Dataset):
 def gen_periodproc():
     """ generate periodic process """
     # setting up
-    M=100; N=200; D=2
+    M=400; N=200; D=2
     t=np.linspace(0,2,num=N+1); t=t[1:]
     # means
     mu=np.zeros((D,N))

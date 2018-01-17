@@ -2,6 +2,7 @@
 """
 Functions for matrix transformation
 Shiwei Lan @ Caltech, Jan. 2018
+version 0.1
 """
 
 import numpy as np
@@ -21,7 +22,7 @@ def vech(L,order='row'):
         v=R[ind]
     else:
         warings.warn('Wrong order!','once')
-        v=np.empty((D*(D+1)/2,))
+        v=np.empty((np.int(D*(D+1)/2),))
         v[:]=np.nan
     
     return v
@@ -41,7 +42,7 @@ def vechx(L,order='row'):
         v=R[:,ind]
     else:
         warings.warn('Wrong order!','once')
-        v=np.empty((L.shape[0],D*(D+1)/2,))
+        v=np.empty((L.shape[0],np.int(D*(D+1)/2),))
         v[:]=np.nan
     
     return v

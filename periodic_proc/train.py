@@ -20,6 +20,12 @@ Neural Network (VRNN) from https://arxiv.org/abs/1506.02216
 using unimodal isotropic gaussian distributions for 
 inference, prior, and generating models."""
 
+"""
+Modified by
+Shiwei Lan @ CalTech, 2018
+version 1.0
+"""
+
 def train(epoch):
     train_loss = 0
 
@@ -54,7 +60,7 @@ def train(epoch):
 
             # plot the data and reconstruction
             if is_plot:
-                f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
+                f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
                 # plot reconstruction
                 plt.axes(ax1)
                 sns.tsplot(data.view(batch_size,N,-1).data.numpy())
@@ -110,14 +116,14 @@ def test(epoch):
 
 
 #hyperparameters
-M=100; N=200; D=2
+M=400; N=200; D=2
 x_dim = N*D #2
-h_dim = 400
+h_dim = 200
 z_dim = np.int(N*D*(D+1)/2)
 n_layers =  1
 n_epochs = 100
 clip = 10
-learning_rate = 1e-3
+learning_rate = 1e-2
 batch_size = 20
 seed = 128
 print_every = 5
