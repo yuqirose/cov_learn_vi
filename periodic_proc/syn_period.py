@@ -21,8 +21,9 @@ class SynthDataset(Dataset):
 
         self.train = train
         self.transform = transform
-
-        self.ts,self.data=np.load('data/syn_periodproc.npy')
+ 
+        data_folder = '../data/' 
+        self.ts,self.data=np.load(data_folder+'syn_periodproc.npy')
         self.num_exp,self.N,self.D=self.data.shape
         
         self.data=self.data.reshape((self.num_exp,-1)) # (num_exp, ND)
@@ -69,21 +70,25 @@ def gen_periodproc():
     for m in range(M):
         for n in range(N):
             y[m,n,:]=np.random.multivariate_normal(mu[:,n],Sigma[:,:,n])
-    np.save('data/syn_periodproc.npy', (t,y))
+
+    data_folder = '../data/' 
+    np.save(data_folder+'syn_periodproc.npy', (t,y))
     
     return mu.T,np.rollaxis(Sigma,-1) # return the truth
-    
+
 if __name__ == '__main__':
     mu,Sigma = gen_periodproc()
-    t,y  = np.load('data/syn_periodproc.npy')
+
+    data_folder = '../data/' 
+    t,y  = np.load(data_folder+'syn_periodproc.npy')
     
     plt.figure(1)
     plt.plot(t, vechx(Sigma))
     plt.plot(t, y[1,:,:],'*')
 #     plt.show()
-    plt.savefig('data/syn_periodproc.png')
+    plt.savefig(data_folder+'syn_periodproc.png')
     
     plt.figure(2)
     sns.tsplot(y)
 #     plt.show()
-    plt.savefig('data/syn_periodproc_ts.png')
+    plt.savefig(data_folder+'syn_periodproc_ts.png')

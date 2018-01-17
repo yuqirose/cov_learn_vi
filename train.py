@@ -13,10 +13,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from vae import VAE
 from dgp import DGP
-from syn_wishart import SynthDataset
+from reader import SynthDataset
+from plot import plot_ts
 import visdom 
 
-vis = visdom.Visdom()
 
 """implementation of the Variational Recurrent
 Neural Network (VRNN) from https://arxiv.org/abs/1506.02216
@@ -61,20 +61,7 @@ def train(epoch):
 
    # plot the data and reconstruction
     if is_plot:
-        # f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
-        # sns.kdeplot(data.data.numpy()[:,0], data.data.numpy()[:,1], color="r", shade=True, ax=ax1)
-        # sns.kdeplot(dec_mean.data.numpy()[:,0], dec_mean.data.numpy()[:,1], color="b", shade=True, ax=ax2)
-        plt.subplot(121)
-        plt.imshow(data.data.numpy()[0,].squeeze())
-        plt.subplot(122)
-        plt.imshow(dec_mean.view(-1,28,28).data.numpy()[0,].squeeze())
-
-        plt.show()
-        plt.pause(1e-6)
-        plt.gcf().clear()
-
-        # sample = model.sample_z(data)    
-        # plt.imshow(sample)
+        plot_img()
 
 def test(epoch):
     """uses test data to evaluate 
@@ -102,26 +89,33 @@ def test(epoch):
     nll = -torch.sum(ll.log_prob(data.view(-1, x_dim)))/(args.batch_size)
     print('test log likelihood', nll.data)
 
+
+
+
+
+
 #hyperparameters
-x_dim = 28*28 
+N = 200 
+D = 2
+x_dim = N*D #28*28 
 h_dim = 100
-z_dim = 20
+z_dim = np.int(N*D*(D+1)/2) #20
 n_layers =  1
 clip = 1.10
-is_plot=False
-data_set = "mnist"
+is_plot=True
+data_set = "synth"
 
 
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=10, metavar='N',
+parser.add_argument('--batch-size', type=int, default=20, metavar='N',
+                    help='input batch size for training (default: 20)')
+parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--print-interval', type=int, default=100, metavar='N',
+parser.add_argument('--print-interval', type=int, default=5, metavar='N',
                     help='how many batches to wait before printing training status')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
@@ -140,11 +134,11 @@ if args.cuda:
 if data_set == "synth":
     train_loader = torch.utils.data.DataLoader(
         SynthDataset(train=True),
-        batch_size=batch_size, shuffle=True)
+        batch_size=args.batch_size, shuffle=True)
 
     test_loader = torch.utils.data.DataLoader(
         SynthDataset(train=False),
-        batch_size=batch_size, shuffle=True)
+        batch_size=args.batch_size, shuffle=True)
 
 elif data_set == "mnist":   
     train_loader = torch.utils.data.DataLoader(

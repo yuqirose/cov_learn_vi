@@ -101,7 +101,7 @@ def test(epoch):
     for i, (data, _) in enumerate(test_loader):                                            
         
         data = Variable(data)
-        # data = Variable(data.squeeze().transpose(0, 1))
+        # data = Variable(data.squeeze().tr anspose(0, 1))
         # data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
         kld_loss, nll_loss, _, _ = model(data)

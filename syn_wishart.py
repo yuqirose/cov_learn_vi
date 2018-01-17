@@ -7,43 +7,6 @@ import torch
 import matplotlib.pyplot as plt 
 import seaborn as sns
 
-
-
-
-class SynthDataset(Dataset):
-    def __init__(self, train=True, transform=None):
-
-        self.train = train
-        self.transform = transform
-        self.num_exp = int(1e4)
-
-        self.data=np.load('data/syn_mixture.npy')
-
-
-        # Generate sample statistics
-        # self.phi = np.array([[1,0.5,0],[0.5,1,0],[0,0,1]])
-        # self.nu = 5
-        # self.covs = np.array([ inv_wishart_rand(self.nu,self.phi) for i in range(self.num_cov)])
-
-
-    def __len__(self):
-        return self.num_exp
-
-    def __getitem__(self, idx):
-        sample = self.data[idx]
-        # Generate samples on the fly
-        # cov = self.covs[cov_idx]
-        # y_i = np.array( [ npr.multivariate_normal(np.zeros((3,)), cov) for j in range(self.num_exp) ] )
-        # sample = y_i[idx%self.num_exp,]
-
-        if self.transform:
-            sample = self.transform(sample)
-        return torch.FloatTensor(sample), torch.FloatTensor(sample)
-
-
-
-
-
 def inv_wishart_rand_prec(nu,phi):
     return inv(wishart_rand(nu,phi))
 
@@ -123,7 +86,6 @@ def gen_mixture():
     for i in range(num_exp):
         x[i,:] = npr.multivariate_normal(mu_x[:,i], sigma*cov)
     print(x.shape)
-  
     np.save('data/syn_mixture.npy', x)
 
 if __name__ == '__main__':
