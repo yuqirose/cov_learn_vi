@@ -44,13 +44,15 @@ def plot_ts(data, enc, dec):
     N = 200
     D = 2
 
-    f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
-    # plot reconstruction
+    f, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=False, sharex=True)
+    # plot data
     plt.axes(ax1)
     sns.tsplot(data.view(batch_size,N,-1).data.numpy())
-    # plot latent variables
-    plt.axes(ax2)
 
+    # plot reconstruction
+    plt.axes(ax2)
+    
+    # plot latent variables
     # sample_L = model.sample_z(data).reshape((batch_size,N,-1))
     sample_L = enc_mean.view(batch_size,N,-1).data.numpy()
     sample_Sigma = ivech2x(sample_L)

@@ -153,7 +153,7 @@ elif data_set == "mnist":
 
 
 
-model = VAE(x_dim, h_dim, z_dim)
+model = DGP(x_dim, h_dim, z_dim)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(1, args.epochs + 1):

@@ -91,7 +91,7 @@ class DGP(nn.Module):
         dec_cov = self.fc32(h3)
         return dec_mean, dec_cov
 
-    def forward(self, x):
+    def forward(self, x, dist):
         # r(f|x)
         f_mean, f_cov_1, f_cov_2  = self.encode_1(x.view(-1, self.x_dim))
         f = self.reparameterize_gp(f_mean, f_cov_1, f_cov_2)
@@ -103,6 +103,11 @@ class DGP(nn.Module):
         x_mean, x_cov = self.decode(z)
 
         kld_loss = self._kld_loss(z_mean, z_cov)
+        if dist == "gauss":
+            nll_loss = self._nll_loss(dec_mean, x)
+        elif dist == "bce":
+            nll_loss = self._bce_loss(dec_mean, x)
+
         nll_loss = self._nll_loss(x_mean, x_cov, x)
 
         return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
