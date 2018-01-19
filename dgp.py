@@ -8,34 +8,33 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 import numpy as np
+from util.batchutil import bivech
 
 
 
 class DGP(nn.Module):
     """deep gaussian process """
-    def __init__(self, x_dim, h_dim, z1_dim, z2_dim):
+    def __init__(self, x_dim, h_dim, t_dim, z_dim):
         super(DGP, self).__init__()
 
         self.x_dim = x_dim
         self.h_dim = h_dim
-        self.z1_dim = z1_dim
-        self.z2_dim = z2_dim
-
-        
+        self.t_dim = t_dim
+        self.z_dim = z_dim
+   
         # encode 1
         self.fc1 = nn.Linear(x_dim, h_dim)
-        self.fc11 = nn.Linear(h_dim, z1_dim)
-        self.fc12 = nn.Linear(h_dim, z1_dim)
-        self.fc13 = nn.Linear(h_dim, z1_dim)
+        self.fc11 = nn.Linear(h_dim, t_dim)
+        self.fc12 = nn.Linear(h_dim, int(t_dim*(t_dim+1)/2))
          
         # encode 2
-        self.fc2 = nn.Linear(z1_dim, h_dim)
-        self.fc21 = nn.Linear(h_dim, z2_dim)
-        self.fc22 = nn.Linear(h_dim, z2_dim)
+        self.fc2 = nn.Linear(t_dim, h_dim)
+        self.fc21 = nn.Linear(h_dim, z_dim)
+        self.fc22 = nn.Linear(h_dim, z_dim)
 
 
         # transform
-        self.fc3 = nn.Linear(z2_dim, h_dim)
+        self.fc3 = nn.Linear(z_dim*t_dim, h_dim)
         # decode
         self.fc31 = nn.Linear(h_dim, x_dim)
         self.fc32 = nn.Linear(h_dim, x_dim)
@@ -46,12 +45,11 @@ class DGP(nn.Module):
         self.tanh = nn.Tanh()
 
     def encode_1(self, x):
-        # Gaussian process prior
+        # Gaussian process prior over time 
         h1 = self.relu(self.fc1(x))
         enc_mean = self.fc11(h1)
-        enc_cov_1 = self.fc12(h1)
-        enc_cov_2 = self.fc13(h1)
-        return enc_mean, enc_cov_1, enc_cov_2
+        enc_cov = self.fc12(h1)
+        return enc_mean, enc_cov
 
     def encode_2(self, x):
         # adding GP prior on xi
@@ -60,17 +58,15 @@ class DGP(nn.Module):
         enc_cov = self.fc21(h2)
         return enc_mean, enc_cov
 
-    def reparameterize_gp(self, mu, logcov, u):
+    def reparameterize_gp(self, mu, logcov):
         #  sample from gaussian process 
         #  f = K^{-1} + L\eps \eps ~ N(0,I)
         if self.training:
-            L = batch_diag(logcov.exp_())+u.unsqueeze(2) # rank-1 approximation
-            # cholesky decomposition
-            # A_LU, pivots = torch.btrifact(cov.data)
-            # P, a_L, a_U = torch.btriunpack(A_LU, pivots)
-            eps = Variable(L.data.new(L.size()[0:2]).normal_())
-            eps_view = eps.unsqueeze(2)
-            z = L.bmm(eps_view).unsqueeze(2).add(mu)
+            b_sz = mu.size()[0]
+            cov = logcov.exp_()
+            eps = Variable(mu.data.new(mu.size()).normal_()).view(b_sz,self.t_dim,-1)
+            covh_sqform = bivech(cov)
+            z = covh_sqform.bmm(eps).view(b_sz,-1).add(mu)
             return z
         else:
             return mu
@@ -95,20 +91,24 @@ class DGP(nn.Module):
 
     def forward(self, x, dist):
         # r(f|x)
-        f_mean, f_cov_1, f_cov_2  = self.encode_1(x.view(-1, self.x_dim))
-        f = self.reparameterize_gp(f_mean, f_cov_1, f_cov_2)
+        f_mean, f_cov = self.encode_1(x.view(-1, self.x_dim))
+        f = self.reparameterize_gp(f_mean, f_cov)
 
         # q(z|f)
-        z_mean, z_cov = self.encode_2(f)
-        z = self.reparameterize_nm(z_mean, z_cov)
+        zs = []
+        for t in range(self.t_dim):
+            z_mean, z_cov = self.encode_2(f)
+            z = self.reparameterize_nm(z_mean, z_cov)
+            zs.append(z)
         # p(x|z)
-        x_mean, x_cov = self.decode(z)
+        zs = torch.cat(zs, dim=1)
+        x_mean, x_cov = self.decode(zs)
 
         kld_loss = self._kld_loss(z_mean, z_cov)
         if dist == "gauss":
-            nll_loss = self._nll_loss(dec_mean, x)
+            nll_loss = self._nll_loss(x_mean, x_cov, x)
         elif dist == "bce":
-            nll_loss = self._bce_loss(dec_mean, x)
+            nll_loss = self._bce_loss(x_mean, x)
 
         nll_loss = self._nll_loss(x_mean, x_cov, x)
 

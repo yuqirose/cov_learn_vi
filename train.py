@@ -33,7 +33,7 @@ def train(epoch):
 
         #forward + backward + optimize
         optimizer.zero_grad()
-        kld_loss, nll_loss, (enc_mean, enc_cov), (dec_mean, dec_cov) = model(data, 'bce')
+        kld_loss, nll_loss, (enc_mean, enc_cov), (dec_mean, dec_cov) = model(data, 'gauss')
         
         # loss
         loss = kld_loss + nll_loss
@@ -95,12 +95,12 @@ def test(epoch):
 
 
 #hyperparameters
-N = 200 
+T = 200 
 D = 2
-x_dim = N*D #28*28 
+x_dim = T*D #28*28 
 h_dim = 100
-z1_dim = N #np.int(N*D*(D+1)/2) #20
-z2_dim = D
+t_dim = T
+z_dim = D
 n_layers =  1
 clip = 1.10
 is_plot=True
@@ -154,7 +154,7 @@ elif data_set == "mnist":
 
 
 
-model = DGP(x_dim, h_dim, z1_dim, z2_dim)
+model = DGP(x_dim, h_dim, t_dim, z_dim)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(1, args.epochs + 1):
