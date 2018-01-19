@@ -13,27 +13,29 @@ import numpy as np
 
 class DGP(nn.Module):
     """deep gaussian process """
-    def __init__(self, x_dim, h_dim, z_dim):
+    def __init__(self, x_dim, h_dim, z1_dim, z2_dim):
         super(DGP, self).__init__()
 
         self.x_dim = x_dim
         self.h_dim = h_dim
-        self.z_dim = z_dim
-        # feature
+        self.z1_dim = z1_dim
+        self.z2_dim = z2_dim
+
+        
+        # encode 1
         self.fc1 = nn.Linear(x_dim, h_dim)
-        # encode
-        self.fc11 = nn.Linear(h_dim, z_dim)
-        self.fc12 = nn.Linear(h_dim, z_dim)
-        self.fc13 = nn.Linear(h_dim, z_dim)
+        self.fc11 = nn.Linear(h_dim, z1_dim)
+        self.fc12 = nn.Linear(h_dim, z1_dim)
+        self.fc13 = nn.Linear(h_dim, z1_dim)
          
         # encode 2
-        self.fc2 = nn.Linear(z_dim, h_dim)
-        self.fc21 = nn.Linear(h_dim, z_dim)
-        self.fc22 = nn.Linear(h_dim, z_dim)
+        self.fc2 = nn.Linear(z1_dim, h_dim)
+        self.fc21 = nn.Linear(h_dim, z2_dim)
+        self.fc22 = nn.Linear(h_dim, z2_dim)
 
 
         # transform
-        self.fc3 = nn.Linear(z_dim, h_dim)
+        self.fc3 = nn.Linear(z2_dim, h_dim)
         # decode
         self.fc31 = nn.Linear(h_dim, x_dim)
         self.fc32 = nn.Linear(h_dim, x_dim)
@@ -44,6 +46,7 @@ class DGP(nn.Module):
         self.tanh = nn.Tanh()
 
     def encode_1(self, x):
+        # Gaussian process prior
         h1 = self.relu(self.fc1(x))
         enc_mean = self.fc11(h1)
         enc_cov_1 = self.fc12(h1)
@@ -57,32 +60,31 @@ class DGP(nn.Module):
         enc_cov = self.fc21(h2)
         return enc_mean, enc_cov
 
+    def reparameterize_gp(self, mu, logcov, u):
+        #  sample from gaussian process 
+        #  f = K^{-1} + L\eps \eps ~ N(0,I)
+        if self.training:
+            L = batch_diag(logcov.exp_())+u.unsqueeze(2) # rank-1 approximation
+            # cholesky decomposition
+            # A_LU, pivots = torch.btrifact(cov.data)
+            # P, a_L, a_U = torch.btriunpack(A_LU, pivots)
+            eps = Variable(L.data.new(L.size()[0:2]).normal_())
+            eps_view = eps.unsqueeze(2)
+            z = L.bmm(eps_view).unsqueeze(2).add(mu)
+            return z
+        else:
+            return mu
+
 
     def reparameterize_nm(self, mu, logcov):
         #  mu + R*esp (C = R'R)
         if self.training:
-            cov = logcov.exp_() 
+            cov = logcov.mul(0.5).exp_() 
             eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
             z = cov.mul(eps).add_(mu)
             return z
         else:
             return mu
-
-    def reparameterize_gp(self, mu, logcov, u):
-        #  sample from gaussian process 
-        #  f = K^{-1} + L\eps \eps ~ N(0,I)
-        if self.training:
-            cov = torch.diag(logcov.exp_())+ torch.bmm(u.unsqueeze(2), u.unsqueeze(1)) # rank-1 approximation
-            A_LU, pivots = torch.btrifact(cov.data)
-            P, a_L, a_U = torch.btriunpack(A_LU, pivots)
-            eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
-            eps_view = eps.unsqueeze(2)
-            L = Variable(a_L)
-            z = L.bmm(eps_view).squeeze(2).add(mu)
-            return z
-        else:
-            return mu
-
 
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
@@ -185,8 +187,13 @@ def batch_inverse(X):
         val[i,:,:] =X[i,:,:].inverse()
     return val
 
+def batch_diag(X): 
+    (batch_sz,dim) = X.size()
 
-
+    val = Variable(torch.zeros( batch_sz, dim, dim))
+    for i in range(X.size()[0]):
+        val[i,:,:] =torch.diag(X[i,:])
+    return val
 
 
 

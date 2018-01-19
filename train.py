@@ -99,7 +99,8 @@ N = 200
 D = 2
 x_dim = N*D #28*28 
 h_dim = 100
-z_dim = np.int(N*D*(D+1)/2) #20
+z1_dim = N #np.int(N*D*(D+1)/2) #20
+z2_dim = D
 n_layers =  1
 clip = 1.10
 is_plot=True
@@ -153,7 +154,7 @@ elif data_set == "mnist":
 
 
 
-model = DGP(x_dim, h_dim, z_dim)
+model = DGP(x_dim, h_dim, z1_dim, z2_dim)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(1, args.epochs + 1):
