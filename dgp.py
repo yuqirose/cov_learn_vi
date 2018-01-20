@@ -112,7 +112,7 @@ class DGP(nn.Module):
 
         nll_loss = self._nll_loss(x_mean, x_cov, x)
 
-        return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
+        return kld_loss, nll_loss,(f_mean, f_cov), (x_mean, x_cov)
 
     def sample_z(self, x):
         # encoder 

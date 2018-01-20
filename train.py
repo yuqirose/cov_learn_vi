@@ -23,6 +23,7 @@ using unimodal isotropic gaussian distributions for
 inference, prior, and generating models."""
 
 def train(epoch):
+
     train_loss = 0
 
     for batch_idx, (data, _) in enumerate(train_loader):
@@ -54,16 +55,18 @@ def train(epoch):
 
         train_loss += loss.data[0]
 
+        # plot the data and reconstruction
+        if is_plot:
+            plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
+            plt.show(block=False)
+            plt.pause(1e-6)
+            plt.close()
+
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
         epoch, train_loss / len(train_loader.dataset)))
 
-   # plot the data and reconstruction
-    if is_plot:
-        plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
-        plt.show(block=False)
-        plt.pause(1e-6)
-        plt.close()
+
 
 
 def test(epoch):
