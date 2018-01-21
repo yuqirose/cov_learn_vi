@@ -80,7 +80,7 @@ def test(epoch):
         # data = Variable(data.squeeze().transpose(0, 1))
         # data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
-        kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov) = model(data, 'bce')
+        kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov) = model(data, 'gauss')
         mean_kld_loss += kld_loss.data[0]
         mean_nll_loss += nll_loss.data[0]
 
@@ -157,7 +157,7 @@ elif data_set == "mnist":
 
 
 
-model = DGP(x_dim, h_dim, t_dim, z_dim)
+model = DGP(x_dim, h_dim, t_dim)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(1, args.epochs + 1):

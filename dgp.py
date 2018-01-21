@@ -14,13 +14,17 @@ from util.batchutil import bivech
 
 class DGP(nn.Module):
     """deep gaussian process """
-    def __init__(self, x_dim, h_dim, t_dim, z_dim):
+    def __init__(self, x_dim, h_dim, t_dim):
         super(DGP, self).__init__()
 
         self.x_dim = x_dim
         self.h_dim = h_dim
         self.t_dim = t_dim
+        d_dim = x_dim/t_dim
+        l_dim = int(d_dim*(d_dim+1)/2)
+        z_dim = t_dim * l_dim
         self.z_dim = z_dim
+
    
         # encode 1
         self.fc1 = nn.Linear(x_dim, h_dim)
@@ -29,13 +33,13 @@ class DGP(nn.Module):
          
         # encode 2
         self.fc2 = nn.Linear(t_dim, h_dim)
-        self.fc21 = nn.Linear(h_dim, z_dim)
+
+        self.fc21 = nn.Linear(h_dim, z_dim) 
         self.fc22 = nn.Linear(h_dim, z_dim)
 
 
-        # transform
-        self.fc3 = nn.Linear(z_dim*t_dim, h_dim)
         # decode
+        self.fc3 = nn.Linear(z_dim, h_dim)
         self.fc31 = nn.Linear(h_dim, x_dim)
         self.fc32 = nn.Linear(h_dim, x_dim)
 
@@ -55,7 +59,7 @@ class DGP(nn.Module):
         # adding GP prior on xi
         h2 = self.relu(self.fc2(x))
         enc_mean = self.fc21(h2)
-        enc_cov = self.fc21(h2)
+        enc_cov = self.fc22(h2)
         return enc_mean, enc_cov
 
     def reparameterize_gp(self, mu, logcov):
@@ -75,7 +79,7 @@ class DGP(nn.Module):
     def reparameterize_nm(self, mu, logcov):
         #  mu + R*esp (C = R'R)
         if self.training:
-            cov = logcov.mul(0.5).exp_() 
+            cov = logcov.mul(0.5).exp_()
             eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
             z = cov.mul(eps).add_(mu)
             return z
@@ -95,14 +99,11 @@ class DGP(nn.Module):
         f = self.reparameterize_gp(f_mean, f_cov)
 
         # q(z|f)
-        zs = []
-        for t in range(self.t_dim):
-            z_mean, z_cov = self.encode_2(f)
-            z = self.reparameterize_nm(z_mean, z_cov)
-            zs.append(z)
+        z_mean, z_cov = self.encode_2(f)
+        z = self.reparameterize_nm(z_mean, z_cov)
+    
         # p(x|z)
-        zs = torch.cat(zs, dim=1)
-        x_mean, x_cov = self.decode(zs)
+        x_mean, x_cov = self.decode(z)
 
         kld_loss = self._kld_loss(z_mean, z_cov)
         if dist == "gauss":
