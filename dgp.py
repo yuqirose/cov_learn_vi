@@ -105,7 +105,7 @@ class DGP(nn.Module):
         # p(x|z)
         x_mean, x_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(z_mean, z_cov)
+        kld_loss = self._kld_loss(z_mean, z_cov) + 
         if dist == "gauss":
             nll_loss = self._nll_loss(x_mean, x_cov, x)
         elif dist == "bce":
@@ -117,12 +117,12 @@ class DGP(nn.Module):
 
     def sample_z(self, x):
         # encoder 
-        f_mean, f_cov_1, f_cov_2 = self.encode_1(x)
-        f = self.reparameterize_gp(f_mean, f_cov_1, f_cov_2)
+        f_mean, f_cov = self.encode_1(x)
+        f = self.reparameterize_gp(f_mean, f_cov)
 
         z_mean, z_cov = self.encode_2(f)
         z = self.reparameterize_nm(z_mean, z_cov)
-        return z.data.numpy()
+        return z
 
     def sample_x(self):
         means = []
@@ -144,17 +144,19 @@ class DGP(nn.Module):
         KLD /= batch_size
         return KLD
 
-    # def _kld_loss(self, mu, logcov):
-    #     # 0.5 * log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)
-    #     cov = logcov.exp()
-    #     prior_cov = prior_cov.exp()
-    #     cov_inv = batch_inverse(cov)
 
-    #     KLD = batch_trace(logcov) - batch_trace(prior_cov)
-    #     KLD = KLD + batch_trace(torch.bmm(cov_inv,prior_cov))
-    #     KLD = KLD + torch.bmm(torch.bmm(mu.unsqueeze(1), cov_inv), mu.unsqueeze(2))
-    #     print('KLD', KLD)
-    #     return -0.5*torch.sum(KLD)
+    def _kld_loss_mvn(self, mu, logcov):
+        # KL loss for multivariate normal 
+        # 0.5 * log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)
+        cov = logcov.exp()
+        prior_cov = prior_cov.exp()
+        cov_inv = batch_inverse(cov)
+
+        KLD = batch_trace(logcov) - batch_trace(prior_cov)
+        KLD = KLD + batch_trace(torch.bmm(cov_inv,prior_cov))
+        KLD = KLD + torch.bmm(torch.bmm(mu.unsqueeze(1), cov_inv), mu.unsqueeze(2))
+        print('KLD', KLD)
+        return -0.5*torch.sum(KLD)
 
     def _nll_loss(self, mean, cov, x): 
         # 0.5 * log det (x) + mu s

@@ -57,7 +57,10 @@ def train(epoch):
 
         # plot the data and reconstruction
         if is_plot:
-            plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
+            z = model.sample_z(data)
+
+            plot_ts(data, z)
+            # plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
             plt.show(block=False)
             plt.pause(1e-6)
             plt.close()

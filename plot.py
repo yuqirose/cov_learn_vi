@@ -33,14 +33,14 @@ def plot_kde():
     plt.pause(1e-6)
     plt.gcf().clear()
 
-def plot_ts(data, enc, dec):
+def plot_ts(data, dec_mean):
     """
     plot time series with uncertainty
     """
-    enc_mean, enc_cov = enc
-    dec_mean, dec_cov = dec
+    # enc_mean, enc_cov = enc
+    # dec_mean, dec_cov = dec
 
-    batch_size = enc_mean.size()[0]
+    batch_size = dec_mean.size()[0]
     N = 200
     D = 2
 
