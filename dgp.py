@@ -26,12 +26,12 @@ class DGP(nn.Module):
         self.z_dim = z_dim
 
    
-        # encode 1
+        # encode 1: x - z
         self.fc1 = nn.Linear(x_dim, h_dim)
         self.fc11 = nn.Linear(h_dim, t_dim)
         self.fc12 = nn.Linear(h_dim, int(t_dim*(t_dim+1)/2))
          
-        # encode 2
+        # encode 2: x,z ->f
         self.fc2 = nn.Linear(t_dim, h_dim)
 
         self.fc21 = nn.Linear(h_dim, z_dim) 
@@ -49,28 +49,28 @@ class DGP(nn.Module):
         self.tanh = nn.Tanh()
 
     def encode_1(self, x):
-        # Gaussian process prior over time 
+        # f(\xi)
         h1 = self.relu(self.fc1(x))
         enc_mean = self.fc11(h1)
         enc_cov = self.fc12(h1)
         return enc_mean, enc_cov
 
     def encode_2(self, x):
-        # adding GP prior on xi
+        # L
         h2 = self.relu(self.fc2(x))
         enc_mean = self.fc21(h2)
         enc_cov = self.fc22(h2)
         return enc_mean, enc_cov
 
     def reparameterize_gp(self, mu, logcov):
-        #  sample from gaussian process 
-        #  f = K^{-1} + L\eps \eps ~ N(0,I)
+        #  z = mu+ Lxi
+      
         if self.training:
             b_sz = mu.size()[0]
             cov = logcov.exp_()
-            eps = Variable(mu.data.new(mu.size()).normal_()).view(b_sz,self.t_dim,-1)
-            covh_sqform = bivech(cov)
-            z = covh_sqform.bmm(eps).view(b_sz,-1).add(mu)
+            xi = Variable(mu.data.new(mu.size()).normal_()).view(b_sz,self.t_dim,-1)
+            covh_sqform = bivech(cov) 
+            z = covh_sqform.bmm(xi).view(b_sz,-1).add(mu)
             return z
         else:
             return mu
@@ -95,7 +95,9 @@ class DGP(nn.Module):
 
     def forward(self, x, dist):
         # r(f|x)
-        f_mean, f_cov = self.encode_1(x.view(-1, self.x_dim))
+        va_sz = 100
+        xi = torch.distributions.normal(va_sz)
+        f_mean, f_cov = self.encode_1(x.view(-1, self.x_dim), xi)
         f = self.reparameterize_gp(f_mean, f_cov)
 
         # q(z|f)
@@ -105,7 +107,7 @@ class DGP(nn.Module):
         # p(x|z)
         x_mean, x_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(z_mean, z_cov) + 
+        kld_loss = self._kld_loss(z_mean, z_cov) + self.kld_loss_mvn(f_mean, f_cov)
         if dist == "gauss":
             nll_loss = self._nll_loss(x_mean, x_cov, x)
         elif dist == "bce":
@@ -147,16 +149,19 @@ class DGP(nn.Module):
 
     def _kld_loss_mvn(self, mu, logcov):
         # KL loss for multivariate normal 
-        # 0.5 * log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)
-        cov = logcov.exp()
-        prior_cov = prior_cov.exp()
-        cov_inv = batch_inverse(cov)
+        # 0.5 * [ log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)]
+        b_size = mu.size()[0]
+        covh1 = logcov.exp_()
+        S1 = bivech2(covh1)
+        S2 = 
 
-        KLD = batch_trace(logcov) - batch_trace(prior_cov)
-        KLD = KLD + batch_trace(torch.bmm(cov_inv,prior_cov))
-        KLD = KLD + torch.bmm(torch.bmm(mu.unsqueeze(1), cov_inv), mu.unsqueeze(2))
-        print('KLD', KLD)
-        return -0.5*torch.sum(KLD)
+
+        KLD = batch_trace(S2) - batch_trace(S1) - S1.size()[1]+ batch_trace(torch.bmm(S2,S1))
+        mu = mu2-mu1
+        cov_inv2 = batch_inverse(cov2)
+        KLD = KLD + torch.bmm(torch.bmm(mu.unsqueeze(1), cov_inv2), mu.unsqueeze(2))
+        KLD = 0.5 * torch.sum(KLD)
+        return KLD
 
     def _nll_loss(self, mean, cov, x): 
         # 0.5 * log det (x) + mu s

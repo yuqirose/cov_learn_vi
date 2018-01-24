@@ -114,8 +114,8 @@ class VAE(nn.Module):
 
     def _kld_loss(self, mu, covh):
         # q(z|x)||p(z), q~N(mu0,S0), p~N(mu1,S1), mu0=mu, S0=cov, mu1=0, S1=I
-        # KLD = 0.5 * ( log det(S1) - log det(S0) -D + trace(S1^-1 S0) + (mu1-mu0)^TS1^-1(mu1-mu0) )
-        
+        # KLD = 0.5 * [ log det(S1) - log det(S0) -D + trace(S1^-1 S0) + (mu0-mu1)^TS1^-1(mu0-mu1) ]
+        # 
         cov = bivech2(covh)
         D_star = np.int(self.D*(self.D+1)/2)
         tr0 = D_star*torch.sum(torch.mul(self.iK,cov))
