@@ -70,8 +70,8 @@ class VGP(nn.Module):
             print(cov.data.numpy())
             L, piv = torch.pstrf(cov) #cholesky decomposition
 
-            eps = Variable(s.data.new(s.size()).normal_())
-            f = L.mul(eps).view(b_sz,-1).add(mu)
+            eps = Variable(t.data.new(t.size()).normal_())
+            f = L.matmul(eps).add(mu)
             return f
         else:
             return mu
@@ -131,7 +131,7 @@ class VGP(nn.Module):
         elif dist == "bce":
             nll_loss = self._bce_loss(x_mean, x)
 
-        return kld_loss, nll_loss,(f_mean, f_cov), (x_mean, x_cov)
+        return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
 
     def sample_z(self, x):
         # encoder 
