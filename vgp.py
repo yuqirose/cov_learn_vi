@@ -12,31 +12,26 @@ from util.batchutil import bivech
 
 
 
-class DGP(nn.Module):
-    """deep gaussian process """
+class VGP(nn.Module):
+    """variational gaussian process """
     def __init__(self, x_dim, h_dim, t_dim):
-        super(DGP, self).__init__()
+        super(VGP, self).__init__()
 
         self.x_dim = x_dim
         self.h_dim = h_dim
         self.t_dim = t_dim
-        d_dim = x_dim/t_dim
-        l_dim = int(d_dim*(d_dim+1)/2)
-        z_dim = t_dim * l_dim
-        self.z_dim = z_dim
+        d_dim = int(x_dim/t_dim)
+        z_dim = x_dim
 
-
-        # encode 1: x -> f
+        # encode 1: x -> s,t (variational data)
         self.fc1 = nn.Linear(x_dim, h_dim)
         self.fc11 = nn.Linear(h_dim, t_dim)
-        self.fc12 = nn.Linear(h_dim, int(t_dim*(t_dim+1)/2))
+        self.fc12 = nn.Linear(h_dim, d_dim)
          
-        # encode 2: f -> z
-        self.fc2 = nn.Linear(t_dim, h_dim)
-
+        # encode 2: x,z -> f, \xi
+        self.fc2 = nn.Linear(t_dim+d_dim, h_dim)
         self.fc21 = nn.Linear(h_dim, z_dim) 
         self.fc22 = nn.Linear(h_dim, z_dim)
-
 
         # decode
         self.fc3 = nn.Linear(z_dim, h_dim)
@@ -51,33 +46,55 @@ class DGP(nn.Module):
     def encode_1(self, x):
         # f(\xi)
         h1 = self.relu(self.fc1(x))
-        enc_mean = self.fc11(h1)
-        enc_cov = self.fc12(h1)
-        return enc_mean, enc_cov
+        s = self.fc11(h1)
+        t = self.fc12(h1)
+        return s, t
 
-    def encode_2(self, x):
-        # L
-        h2 = self.relu(self.fc2(x))
+    def encode_2(self, f, xi):
+        # [x, z] - > \xi,f  
+        inp = torch.cat((f, xi), 1)
+        h2 = self.relu(self.fc2(inp))
         enc_mean = self.fc21(h2)
         enc_cov = self.fc22(h2)
         return enc_mean, enc_cov
 
-    def reparameterize_gp(self, mu, logcov):
-        #  z = mu+ Lxi
-      
+    def reparameterize_gp(self, xi, s, t):
+        #  reparameterize gp dist
         if self.training:
-            b_sz = mu.size()[0]
-            cov = logcov.exp_()
-            xi = Variable(mu.data.new(mu.size()).normal_()).view(b_sz,self.t_dim,-1)
-            covh_sqform = bivech(cov) 
-            z = covh_sqform.bmm(xi).view(b_sz,-1).add(mu)
-            return z
+            b_sz = s.size()[0]
+            kk_inv = self.kernel(xi,s).mm(self.kernel(s,s).inverse())
+            K = self.kernel(s,s)
+            mu = kk_inv.unsqueeze(1).matmul(t).squeeze(1)
+            cov = self.kernel(xi, xi)-kk_inv.mul(self.kernel(s,xi).transpose(0,1))
+
+            print(cov.data.numpy())
+            L, piv = torch.pstrf(cov) #cholesky decomposition
+
+            eps = Variable(s.data.new(s.size()).normal_())
+            f = L.mul(eps).view(b_sz,-1).add(mu)
+            return f
         else:
             return mu
 
+    def kernel(self, x, y):
+        # evaluate kernel value given data pair
+
+        def _ard(x,y, sigma2, w):
+            # automatic relavance determination kernel
+            return w.dot((x-y).pow(2)).mul(-0.5).exp_().mul(sigma2)
+            
+        sigma2 = Variable(torch.FloatTensor([1]))
+        w = Variable(torch.ones(x.size()[1]))
+        b_sz = x.size()[0]
+        K = Variable(torch.zeros((b_sz, b_sz)))
+     
+        for i in range(b_sz):
+            for j in range(b_sz):
+                K[i,j] = _ard(x[i,],y[j,], sigma2, w)
+        return K
 
     def reparameterize_nm(self, mu, logcov):
-        #  mu + R*esp (C = R'R)
+        #  reparemterize normal dist
         if self.training:
             cov = logcov.mul(0.5).exp_()
             eps = Variable(cov.data.new(cov.size()[0:2]).normal_())
@@ -95,25 +112,24 @@ class DGP(nn.Module):
 
     def forward(self, x, dist):
         # r(f|x)
-        va_sz = 100
-        xi = torch.distributions.normal(va_sz)
-        f_mean, f_cov = self.encode_1(x.view(-1, self.x_dim), xi)
-        f = self.reparameterize_gp(f_mean, f_cov)
+        s, t = self.encode_1(x.view(-1, self.x_dim))
+
+        # latent input
+        xi = Variable(s.data.new(s.size()).normal_())
+        f = self.reparameterize_gp(xi, s, t)
 
         # q(z|f)
-        z_mean, z_cov = self.encode_2(f)
+        z_mean, z_cov = self.encode_2(f, xi)
         z = self.reparameterize_nm(z_mean, z_cov)
     
         # p(x|z)
         x_mean, x_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(z_mean, z_cov) + self.kld_loss_mvn(f_mean, f_cov)
+        kld_loss = self._kld_loss(z_mean, z_cov) 
         if dist == "gauss":
             nll_loss = self._nll_loss(x_mean, x_cov, x)
         elif dist == "bce":
             nll_loss = self._bce_loss(x_mean, x)
-
-        nll_loss = self._nll_loss(x_mean, x_cov, x)
 
         return kld_loss, nll_loss,(f_mean, f_cov), (x_mean, x_cov)
 
@@ -152,7 +168,7 @@ class DGP(nn.Module):
         # 0.5 * [ log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)]
         b_size = mu.size()[0]
         S1 = bivech2(covh)
-        S2 = 
+        S2 = torch.eye(mu.size()[1]).repeat(b_size)
 
 
         KLD = batch_trace(S2) - batch_trace(S1) - S1.size()[1]+ batch_trace(torch.bmm(S2,S1))
@@ -201,7 +217,5 @@ def batch_diag(X):
     for i in range(X.size()[0]):
         val[i,:,:] =torch.diag(X[i,:])
     return val
-
-
 
 

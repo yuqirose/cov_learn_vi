@@ -10,7 +10,7 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 from torchvision.utils import save_image
 from vae import VAE
-from dgp import DGP
+from vgp import VGP
 from reader import SynthDataset
 from plot import plot_ts
 import matplotlib.pyplot as plt 
@@ -104,17 +104,17 @@ def test(epoch):
 T = 200 
 D = 2
 x_dim = T*D #28*28 
-h_dim = 100
+h_dim = 10
 t_dim = T
 z_dim = D
 n_layers =  1
 clip = 1.10
-is_plot=True
+is_plot=False
 data_set = "synth"
 
 
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
-parser.add_argument('--batch-size', type=int, default=20, metavar='N',
+parser.add_argument('--batch-size', type=int, default=5, metavar='N',
                     help='input batch size for training (default: 20)')
 parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 10)')
@@ -160,7 +160,7 @@ elif data_set == "mnist":
 
 
 
-model = DGP(x_dim, h_dim, t_dim)
+model = VGP(x_dim, h_dim, t_dim)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(1, args.epochs + 1):
