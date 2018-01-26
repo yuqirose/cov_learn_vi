@@ -8,7 +8,7 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 import numpy as np
-from util.batchutil import bivech
+from tensor_util import *
 
 
 
@@ -195,27 +195,5 @@ class VGP(nn.Module):
     def _bce_loss(self, recon_x, x):
         BCE = F.binary_cross_entropy(recon_x, x.view(-1, self.x_dim))
         return BCE
-
-
-def batch_trace(X):
-    val = Variable(torch.zeros(X.size()[0],1))
-    for i in range(X.size()[0]):
-        trace_val = np.trace(X[i,:,:].data.numpy()).astype(float)
-        val[i] = trace_val
-    return val
-
-def batch_inverse(X):
-    val = Variable(torch.zeros(X.size()))
-    for i in range(X.size()[0]):
-        val[i,:,:] =X[i,:,:].inverse()
-    return val
-
-def batch_diag(X): 
-    (batch_sz,dim) = X.size()
-
-    val = Variable(torch.zeros( batch_sz, dim, dim))
-    for i in range(X.size()[0]):
-        val[i,:,:] =torch.diag(X[i,:])
-    return val
 
 
