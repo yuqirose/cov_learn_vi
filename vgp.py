@@ -8,7 +8,7 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 import numpy as np
-from tensor_util import *
+# from tensor_util import *
 
 
 
@@ -28,10 +28,15 @@ class VGP(nn.Module):
         self.fc11 = nn.Linear(h_dim, t_dim)
         self.fc12 = nn.Linear(h_dim, d_dim)
          
-        # encode 2: x,z -> f, \xi
+        # encode 2: f -> z
         self.fc2 = nn.Linear(t_dim+d_dim, h_dim)
         self.fc21 = nn.Linear(h_dim, z_dim) 
         self.fc22 = nn.Linear(h_dim, z_dim)
+
+        # encode 3: x, z -> r
+        self.fc23 = nn.Linear(x_dim + z_dim, h_dim)
+        self.fc24 = nn.Linear(h_dim, t_dim+d_dim)
+        self.fc25 = nn.Linear(h_dim, t_dim+d_dim)
 
         # decode
         self.fc3 = nn.Linear(z_dim, h_dim)
@@ -58,6 +63,16 @@ class VGP(nn.Module):
         enc_cov = self.fc22(h2)
         return enc_mean, enc_cov
 
+    def encode_3(self, x, z):
+        inp = torch.cat((x,z), 1)
+        h2 = self.relu(self.fc2(inp))
+        enc_mean = self.fc21(h2)
+        enc_cov = self.fc22(h2)
+        xi_mean, fxi_mean = enc_mean # slice
+        xi_cov, fxi_cov = enc_cov
+        return xi_mean, xi_cov, fxi_mean, fxi_cov
+
+
     def reparameterize_gp(self, xi, s, t):
         #  reparameterize gp dist
         if self.training:
@@ -66,12 +81,13 @@ class VGP(nn.Module):
             K = self.kernel(s,s)
             mu = kk_inv.unsqueeze(1).matmul(t).squeeze(1)
             cov = self.kernel(xi, xi)-kk_inv.mul(self.kernel(s,xi).transpose(0,1))
+            # L, piv = torch.pstrf(cov) #cholesky decomposition
+            cov_diag = cov.diag()
+            print(cov_diag.data.numpy())
 
-            print(cov.data.numpy())
-            L, piv = torch.pstrf(cov) #cholesky decomposition
-
+            L = torch.sqrt(cov_diag)
             eps = Variable(t.data.new(t.size()).normal_())
-            f = L.matmul(eps).add(mu)
+            f = torch.diag(L).matmul(eps).add(mu)
             return f
         else:
             return mu
@@ -82,7 +98,7 @@ class VGP(nn.Module):
         def _ard(x,y, sigma2, w):
             # automatic relavance determination kernel
             return w.dot((x-y).pow(2)).mul(-0.5).exp_().mul(sigma2)
-            
+        
         sigma2 = Variable(torch.FloatTensor([1]))
         w = Variable(torch.ones(x.size()[1]))
         b_sz = x.size()[0]
@@ -116,21 +132,34 @@ class VGP(nn.Module):
 
         # latent input
         xi = Variable(s.data.new(s.size()).normal_())
+        print('xi shape', xi.shape)
         f = self.reparameterize_gp(xi, s, t)
 
         # q(z|f)
         z_mean, z_cov = self.encode_2(f, xi)
         z = self.reparameterize_nm(z_mean, z_cov)
     
+        # r(xi|x, z)
+        xi_mean, xi_cov = self.encode_3(x, z)
+
+
         # p(x|z)
         x_mean, x_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(z_mean, z_cov) 
+        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss_mvn(f_mean, f_cov)
+
         if dist == "gauss":
             nll_loss = self._nll_loss(x_mean, x_cov, x)
+            -torch.distribution.normal(xi).log_prob
         elif dist == "bce":
-            nll_loss = self._bce_loss(x_mean, x)
+            nll_loss = self._bce_loss(x_mean, x) 
 
+        q_xi = torch.distributions.Normal(torch.zeros(), torch.ones())
+        r_xi = torch.distributions.Normal(xi_mean, xi_cov)
+        log_q_xi =  q_xi.log_prob(xi)
+        log_r_xi =  r_xi.log_prob(xi)
+
+        nll_loss = nll_loss + log_q_xi - log_r_xi
         return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
 
     def sample_z(self, x):
@@ -169,7 +198,6 @@ class VGP(nn.Module):
         b_size = mu.size()[0]
         S1 = bivech2(covh)
         S2 = torch.eye(mu.size()[1]).repeat(b_size)
-
 
         KLD = batch_trace(S2) - batch_trace(S1) - S1.size()[1]+ batch_trace(torch.bmm(S2,S1))
         mu = mu2-mu1
