@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 import numpy as np
+from util.batchutil import bivech2
 # from tensor_util import *
 
 
@@ -21,6 +22,7 @@ class VGP(nn.Module):
         self.h_dim = h_dim
         self.t_dim = t_dim
         d_dim = int(x_dim/t_dim)
+        self.d_dim = d_dim
         z_dim = x_dim
 
         # encode 1: x -> s,t (variational data)
@@ -65,12 +67,12 @@ class VGP(nn.Module):
 
     def encode_3(self, x, z):
         inp = torch.cat((x,z), 1)
-        h2 = self.relu(self.fc2(inp))
-        enc_mean = self.fc21(h2)
-        enc_cov = self.fc22(h2)
-        xi_mean, fxi_mean = enc_mean # slice
-        xi_cov, fxi_cov = enc_cov
-        return xi_mean, xi_cov, fxi_mean, fxi_cov
+        h2 = self.relu(self.fc23(inp))
+        enc_mean = self.fc24(h2)
+        enc_cov = self.fc25(h2)
+        xi_mean, fxi_mean = enc_mean.narrow(1, 0, self.t_dim), enc_mean.narrow(1, self.t_dim, self.d_dim)  # slice
+        xi_cov, fxi_cov = enc_cov.narrow(1, 0, self.t_dim), enc_cov.narrow(1, self.t_dim, self.d_dim) 
+        return xi_mean, fxi_mean, xi_cov, fxi_cov
 
 
     def reparameterize_gp(self, xi, s, t):
@@ -140,24 +142,22 @@ class VGP(nn.Module):
         z = self.reparameterize_nm(z_mean, z_cov)
     
         # r(xi|x, z)
-        xi_mean, xi_cov = self.encode_3(x, z)
+        xi_mean, fxi_mean, xi_cov, fxi_cov  = self.encode_3(x, z)
 
 
         # p(x|z)
         x_mean, x_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss_mvn(f_mean, f_cov)
+        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss(fxi_mean, fxi_cov)
 
         if dist == "gauss":
             nll_loss = self._nll_loss(x_mean, x_cov, x)
-            -torch.distribution.normal(xi).log_prob
         elif dist == "bce":
             nll_loss = self._bce_loss(x_mean, x) 
 
-        q_xi = torch.distributions.Normal(torch.zeros(), torch.ones())
-        r_xi = torch.distributions.Normal(xi_mean, xi_cov)
-        log_q_xi =  q_xi.log_prob(xi)
-        log_r_xi =  r_xi.log_prob(xi)
+        q_xi = torch.distributions.Normal(torch.zeros(xi.size()), torch.ones(xi.size()))
+        log_q_xi =  q_xi.log_prob(xi.data).sum()
+        log_r_xi = self._nll_loss(xi_mean, xi_cov, xi)
 
         nll_loss = nll_loss + log_q_xi - log_r_xi
         return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
