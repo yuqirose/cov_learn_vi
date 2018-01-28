@@ -5,6 +5,7 @@ from torch import nn, optim
 from torch.autograd import Variable
 from chol_diff import chol_fwd, chol_rev
 import scipy as sp
+import numpy as np
 
 
 
@@ -29,28 +30,28 @@ def batch_diag(X):
         val[i,:,:] =torch.diag(X[i,:])
     return val
 
-class MyPstrf(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, A):
-        ctx.save_for_backward(A)
-        L, piv =  torch.pstrf(A)
-        return L
+# class MyPstrf(torch.autograd.Function):
+#     @staticmethod
+#     def forward(ctx, A):
+#         ctx.save_for_backward(A)
+#         L, piv =  torch.pstrf(A)
+#         return L
 
-    @staticmethod
-    def backward(ctx, dL):
-        A, = ctx.saved_tensors
-        Abar = sp.tril(A)
-        dA = chol_rev(dL, Abar) 
-        return dA
-
-
-A = torch.randn(3,3)
-K = Variable(torch.mm(A, A.t()),requires_grad=True)
-pstrf = MyPstrf.apply
-L_hat = pstrf(K)
-L, piv = torch.pstrf(K.data)
+#     @staticmethod
+#     def backward(ctx, dL):
+#         A, = ctx.saved_tensors
+#         Abar = sp.tril(A)
+#         dA = chol_rev(dL, Abar) 
+#         return dA
 
 
-loss = L_hat.pow(2).sum()
-# Use autograd to compute the backward pass.
-loss.backward()
+# A = torch.randn(3,3)
+# K = Variable(torch.mm(A, A.t()),requires_grad=True)
+# pstrf = MyPstrf.apply
+# L_hat = pstrf(K)
+# L, piv = torch.pstrf(K.data)
+
+
+# loss = L_hat.pow(2).sum()
+# # Use autograd to compute the backward pass.
+# loss.backward()

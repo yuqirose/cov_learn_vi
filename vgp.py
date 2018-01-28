@@ -9,7 +9,7 @@ from torchvision import datasets, transforms
 from torchvision.utils import save_image
 import numpy as np
 from util.batchutil import bivech2
-# from tensor_util import *
+from tensor_util import *
 
 
 
@@ -28,7 +28,7 @@ class VGP(nn.Module):
         # encode 1: x -> xi (variational data)
         self.fc1 = nn.Linear(x_dim, h_dim)
         self.fc11 = nn.Linear(h_dim, t_dim)
-        self.fc12 = nn.Linear(h_dim, t_dim)
+        self.fc12 = nn.Linear(h_dim, d_dim)
          
         # encode 2: f -> z
         self.fc2 = nn.Linear(t_dim+d_dim, h_dim)
@@ -57,13 +57,13 @@ class VGP(nn.Module):
         t = self.fc12(h1)
         return s, t
 
-    def encode_2(self, f, xi):
-        # [x, z] - > \xi,f  
-        inp = torch.cat((f, xi), 1)
+    def encode_2(self, xi, f):
+        # [xi, f] - > z  
+        inp = torch.cat((xi, f), 1)
         h2 = self.relu(self.fc2(inp))
-        enc_mean = self.fc21(h2)
-        enc_cov = self.fc22(h2)
-        return enc_mean, enc_cov
+        z_mean = self.fc21(h2)
+        z_cov = self.fc22(h2)
+        return z_mean, z_cov
 
     def encode_3(self, x, z):
         inp = torch.cat((x,z), 1)
@@ -90,9 +90,9 @@ class VGP(nn.Module):
             L = torch.sqrt(cov_diag)
             eps = Variable(t.data.new(t.size()).normal_())
             f = torch.diag(L).matmul(eps).add(mu)
-            return f
+            return f, mu, cov_diag
         else:
-            return mu
+            return mu, mu, cov_diag
 
     def kernel(self, x, y):
         # evaluate kernel value given data pair
@@ -129,26 +129,26 @@ class VGP(nn.Module):
         return dec_mean, dec_cov
 
     def forward(self, x, dist):
-        # r(f|x)
-        xi_mean, xi_cov = self.encode_1(x.view(-1, self.x_dim))
+        # xi
+        s, t = self.encode_1(x.view(-1, self.x_dim))
+        xi  = Variable(s.data.new(s.size()).normal_())
 
-        # latent input
-        xi = self.reparameterize_nm(xi_mean, xi_cov)
-    
-        # q(f|xi, D)
-        f = self.reparameterize_gp(xi, s, t)
+        # q(f|xi, s, t)
+        f, qf_mean, qf_cov = self.reparameterize_gp(xi, s, t)
 
         # q(z|xi, f)
         z_mean, z_cov = self.encode_2(xi,f)
         z = self.reparameterize_nm(z_mean, z_cov)
     
-        # r(f|xi, z, x)
-        xi_mean, fxi_mean, xi_cov, fxi_cov  = self.encode_3(x, z)
+        # r(xi, f|z, x)
+        xi_mean, rf_mean, xi_cov, rf_cov  = self.encode_3(x, z)
 
         # p(x|z)
         x_mean, x_cov = self.decode(z)
-
-        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss(fxi_mean, fxi_cov)
+        
+        qf_cov2 = qf_cov.clone().repeat(2,1).t()
+        
+        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss_diag(qf_mean, qf_cov2, rf_mean, rf_cov)
 
         if dist == "gauss":
             nll_loss = self._nll_loss(x_mean, x_cov, x)
@@ -191,18 +191,21 @@ class VGP(nn.Module):
         KLD /= batch_size
         return KLD
 
+    def _kld_loss_diag(self, mu1, s1, mu2, s2):
+        s2_inv = s2.pow(-11)
+        KLD = 0.5 * torch.sum( s2.log() -s1.log() -1 + s2_inv.mul(s1)+ (mu1-mu2).pow(2).mul(s2_inv))
+        # Normalise by same number of elements as in reconstruction
+        batch_size = mu1.size()[0]
+        KLD /= batch_size
+        return KLD
 
-    def _kld_loss_mvn(self, mu, covh):
+    def _kld_loss_mvn(self, mu1, s1, mu2, s2):
         # KL loss for multivariate normal 
         # 0.5 * [ log det(S2) - log det(S1) -d + trace(S2^-1 S1) + (mu2-mu1)^TS2^-1(mu2-mu1)]
-        b_size = mu.size()[0]
-        S1 = bivech2(covh)
-        S2 = torch.eye(mu.size()[1]).repeat(b_size)
-
-        KLD = batch_trace(S2) - batch_trace(S1) - S1.size()[1]+ batch_trace(torch.bmm(S2,S1))
+        KLD = batch_trace(s2) - batch_trace(s1) - s1.size()[1]+ batch_trace(torch.bmm(s2,s1))
         mu = mu2-mu1
-        cov_inv2 = batch_inverse(cov2)
-        KLD = KLD + torch.bmm(torch.bmm(mu.unsqueeze(1), cov_inv2), mu.unsqueeze(2))
+        s2_inv = batch_inverse(s2)
+        KLD = KLD + torch.bmm(torch.bmm(mu2.unsqueeze(1)-mu1, s2_inv), mu.unsqueeze(2)-mu1)
         KLD = 0.5 * torch.sum(KLD)
         return KLD
 
