@@ -85,7 +85,7 @@ class VGP(nn.Module):
             cov = self.kernel(xi, xi)-kk_inv.mul(self.kernel(s,xi).transpose(0,1))
             # L, piv = torch.pstrf(cov) #cholesky decomposition
             cov_diag = cov.diag()
-            print(cov_diag.data.numpy())
+            # print(cov_diag.data.numpy())
 
             L = torch.sqrt(cov_diag)
             eps = Variable(t.data.new(t.size()).normal_())
@@ -141,14 +141,15 @@ class VGP(nn.Module):
         z = self.reparameterize_nm(z_mean, z_cov)
     
         # r(xi, f|z, x)
-        xi_mean, rf_mean, xi_cov, rf_cov  = self.encode_3(x, z)
+        xi_mean, rf_mean, log_xi_cov, log_rf_cov  = self.encode_3(x, z)
 
         # p(x|z)
         x_mean, x_cov = self.decode(z)
         
-        qf_cov2 = qf_cov.clone().repeat(2,1).t()
+        # kronecker covariance 
+        qf_cov2 = qf_cov.clone().repeat(self.d_dim,1).t()
         
-        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss_diag(qf_mean, qf_cov2, rf_mean, rf_cov)
+        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss_diag(qf_mean, qf_cov2, rf_mean, log_rf_cov)
 
         if dist == "gauss":
             nll_loss = self._nll_loss(x_mean, x_cov, x)
@@ -157,7 +158,7 @@ class VGP(nn.Module):
 
         q_xi = torch.distributions.Normal(torch.zeros(xi.size()), torch.ones(xi.size()))
         log_q_xi =  q_xi.log_prob(xi.data).sum()
-        log_r_xi = self._nll_loss(xi_mean, xi_cov, xi)
+        log_r_xi = self._nll_loss(xi_mean, log_xi_cov, xi)
 
         nll_loss = nll_loss + log_q_xi - log_r_xi
         return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
@@ -191,9 +192,10 @@ class VGP(nn.Module):
         KLD /= batch_size
         return KLD
 
-    def _kld_loss_diag(self, mu1, s1, mu2, s2):
-        s2_inv = s2.pow(-11)
-        KLD = 0.5 * torch.sum( s2.log() -s1.log() -1 + s2_inv.mul(s1)+ (mu1-mu2).pow(2).mul(s2_inv))
+    def _kld_loss_diag(self, mu1, s1, mu2, log_s2):
+        s2_inv = log_s2.exp().pow(-1)
+
+        KLD = 0.5 * torch.sum( log_s2 -s1.log() -1 + s2_inv.mul(s1)+ (mu1-mu2).pow(2).mul(s2_inv))
         # Normalise by same number of elements as in reconstruction
         batch_size = mu1.size()[0]
         KLD /= batch_size
