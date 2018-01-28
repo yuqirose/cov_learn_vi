@@ -28,7 +28,7 @@ class VGP(nn.Module):
         # encode 1: x -> xi (variational data)
         self.fc1 = nn.Linear(x_dim, h_dim)
         self.fc11 = nn.Linear(h_dim, t_dim)
-        self.fc12 = nn.Linear(h_dim, d_dim)
+        self.fc12 = nn.Linear(h_dim, t_dim)
          
         # encode 2: f -> z
         self.fc2 = nn.Linear(t_dim+d_dim, h_dim)
@@ -53,9 +53,9 @@ class VGP(nn.Module):
     def encode_1(self, x):
         # f(\xi)
         h1 = self.relu(self.fc1(x))
-        s = self.fc11(h1)
-        t = self.fc12(h1)
-        return s, t
+        xi_mean = self.fc11(h1)
+        xi_cov = self.fc12(h1)
+        return xi_mean, xi_cov
 
     def encode_2(self, xi, f):
         # [xi, f] - > z  
@@ -85,9 +85,10 @@ class VGP(nn.Module):
             cov = self.kernel(xi, xi)-kk_inv.mul(self.kernel(s,xi).transpose(0,1))
             # L, piv = torch.pstrf(cov) #cholesky decomposition
             cov_diag = cov.diag()
-            # print(cov_diag.data.numpy())
 
             L = torch.sqrt(cov_diag)
+            print('mu', mu.size(), mu.data.numpy())
+            print('L', L.size(), L.data.numpy())
             eps = Variable(t.data.new(t.size()).normal_())
             f = torch.diag(L).matmul(eps).add(mu)
             return f, mu, cov_diag
@@ -97,18 +98,18 @@ class VGP(nn.Module):
     def kernel(self, x, y):
         # evaluate kernel value given data pair
 
-        def _ard(x,y, sigma2, w):
+        def _ard(x,y, sigma, w):
             # automatic relavance determination kernel
-            return w.dot((x-y).pow(2)).mul(-0.5).exp_().mul(sigma2)
+            return w.dot((x-y).pow(2)).mul(-0.5).exp_().mul(sigma.pow(2))
         
-        sigma2 = Variable(torch.FloatTensor([1]))
-        w = Variable(torch.ones(x.size()[1]))
+        sigma = Variable(torch.FloatTensor([0.1]), requires_grad=True)
+        w = Variable(torch.ones(x.size()[1]), requires_grad=True)
         b_sz = x.size()[0]
         K = Variable(torch.zeros((b_sz, b_sz)))
      
         for i in range(b_sz):
             for j in range(b_sz):
-                K[i,j] = _ard(x[i,],y[j,], sigma2, w)
+                K[i,j] = _ard(x[i,],y[j,], sigma, w)
         return K
 
     def reparameterize_nm(self, mu, logcov):
@@ -130,8 +131,11 @@ class VGP(nn.Module):
 
     def forward(self, x, dist):
         # xi
-        s, t = self.encode_1(x.view(-1, self.x_dim))
-        xi  = Variable(s.data.new(s.size()).normal_())
+        qxi_mean, log_qxi_cov = self.encode_1(x.view(-1, self.x_dim))
+        xi  = self.reparameterize_nm(qxi_mean, log_qxi_cov)
+
+        s = Variable(torch.randn(xi.size()) ,requires_grad=True)
+        t = Variable(torch.randn(xi.size()[0], self.d_dim), requires_grad=True)
 
         # q(f|xi, s, t)
         f, qf_mean, qf_cov = self.reparameterize_gp(xi, s, t)
@@ -141,7 +145,7 @@ class VGP(nn.Module):
         z = self.reparameterize_nm(z_mean, z_cov)
     
         # r(xi, f|z, x)
-        xi_mean, rf_mean, log_xi_cov, log_rf_cov  = self.encode_3(x, z)
+        rxi_mean, rf_mean, log_rxi_cov, log_rf_cov  = self.encode_3(x, z)
 
         # p(x|z)
         x_mean, x_cov = self.decode(z)
@@ -152,13 +156,13 @@ class VGP(nn.Module):
         kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss_diag(qf_mean, qf_cov2, rf_mean, log_rf_cov)
 
         if dist == "gauss":
-            nll_loss = self._nll_loss(x_mean, x_cov, x)
+            nll_loss = self._rc_loss(x_mean, x)
         elif dist == "bce":
             nll_loss = self._bce_loss(x_mean, x) 
 
-        q_xi = torch.distributions.Normal(torch.zeros(xi.size()), torch.ones(xi.size()))
-        log_q_xi =  q_xi.log_prob(xi.data).sum()
-        log_r_xi = self._nll_loss(xi_mean, log_xi_cov, xi)
+     
+        log_q_xi =  self._ll_loss(qxi_mean, log_qxi_cov, xi)
+        log_r_xi =  self._ll_loss(rxi_mean, log_rxi_cov, xi)
 
         nll_loss = nll_loss + log_q_xi - log_r_xi
         return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
@@ -211,19 +215,23 @@ class VGP(nn.Module):
         KLD = 0.5 * torch.sum(KLD)
         return KLD
 
-    def _nll_loss(self, mean, covh, x): 
+    def _rc_loss(self, mean, x): 
         # 0.5 * log det (x) + mu s
         # take one sample, reconstruction loss
         # print('mean', mean)
         # print('x', x)
         criterion = nn.MSELoss()
-
         NLL = criterion(mean, x)
-        # NLL= 0.5 * torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2))
         batch_size = mean.size()[0]
         NLL /= batch_size
         return NLL
 
+    def _ll_loss(self, mean, logcov, x):
+        # log likelihood
+        ll =  -0.5 * (torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2)))
+        batch_size = mean.size()[0]
+        ll /= batch_size
+        return ll
 
     def _bce_loss(self, recon_x, x):
         BCE = F.binary_cross_entropy(recon_x, x.view(-1, self.x_dim))
