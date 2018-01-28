@@ -25,10 +25,10 @@ class VGP(nn.Module):
         self.d_dim = d_dim
         z_dim = x_dim
 
-        # encode 1: x -> s,t (variational data)
+        # encode 1: x -> xi (variational data)
         self.fc1 = nn.Linear(x_dim, h_dim)
         self.fc11 = nn.Linear(h_dim, t_dim)
-        self.fc12 = nn.Linear(h_dim, d_dim)
+        self.fc12 = nn.Linear(h_dim, t_dim)
          
         # encode 2: f -> z
         self.fc2 = nn.Linear(t_dim+d_dim, h_dim)
@@ -130,20 +130,20 @@ class VGP(nn.Module):
 
     def forward(self, x, dist):
         # r(f|x)
-        s, t = self.encode_1(x.view(-1, self.x_dim))
+        xi_mean, xi_cov = self.encode_1(x.view(-1, self.x_dim))
 
         # latent input
-        xi = Variable(s.data.new(s.size()).normal_())
-        print('xi shape', xi.shape)
+        xi = self.reparameterize_nm(xi_mean, xi_cov)
+    
+        # q(f|xi, D)
         f = self.reparameterize_gp(xi, s, t)
 
-        # q(z|f)
-        z_mean, z_cov = self.encode_2(f, xi)
+        # q(z|xi, f)
+        z_mean, z_cov = self.encode_2(xi,f)
         z = self.reparameterize_nm(z_mean, z_cov)
     
-        # r(xi|x, z)
+        # r(f|xi, z, x)
         xi_mean, fxi_mean, xi_cov, fxi_cov  = self.encode_3(x, z)
-
 
         # p(x|z)
         x_mean, x_cov = self.decode(z)
