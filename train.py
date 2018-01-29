@@ -55,15 +55,15 @@ def train(epoch):
 
         train_loss += loss.data[0]
 
-        # plot the data and reconstruction
-        if is_plot:
-            z = model.sample_z(data)
+    # plot the data and reconstruction
+    if is_plot:
+        z = model.sample_z(data)
 
-            plot_ts(data, z)
-            # plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
-            plt.show(block=False)
-            plt.pause(1e-6)
-            plt.close()
+        plot_ts(data, z)
+        # plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
+        plt.show(block=False)
+        plt.pause(1e-6)
+        plt.close()
 
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
@@ -109,7 +109,7 @@ t_dim = T
 z_dim = D
 n_layers =  1
 clip = 1.10
-is_plot=False
+is_plot=True
 data_set = "synth"
 
 

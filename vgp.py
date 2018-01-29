@@ -50,8 +50,8 @@ class VGP(nn.Module):
         self.s = Parameter(torch.randn(dat_sz, t_dim))
         self.t = Parameter(torch.randn(dat_sz, d_dim))
 
-        self.sigma = Parameter(torch.FloatTensor([0.01]))
-        self.w = Parameter(torch.ones(t_dim)/t_dim)
+        self.sigma = Variable(torch.FloatTensor([0.01]))
+        self.w = Variable(torch.ones(t_dim)/t_dim)
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -77,9 +77,10 @@ class VGP(nn.Module):
         h2 = self.relu(self.fc23(inp))
         enc_mean = self.fc24(h2)
         enc_cov = self.fc25(h2)
-        xi_mean, fxi_mean = enc_mean.narrow(1, 0, self.t_dim), enc_mean.narrow(1, self.t_dim, self.d_dim)  # slice
-        xi_cov, fxi_cov = enc_cov.narrow(1, 0, self.t_dim), enc_cov.narrow(1, self.t_dim, self.d_dim) 
-        return xi_mean, fxi_mean, xi_cov, fxi_cov
+        return enc_mean, enc_cov
+        # xi_mean, fxi_mean = enc_mean.narrow(1, 0, self.t_dim), enc_mean.narrow(1, self.t_dim, self.d_dim)  # slice
+        # xi_cov, fxi_cov = enc_cov.narrow(1, 0, self.t_dim), enc_cov.narrow(1, self.t_dim, self.d_dim) 
+        # return xi_mean, fxi_mean, xi_cov, fxi_cov
 
 
     def reparameterize_gp(self, xi, s, t):
@@ -87,15 +88,20 @@ class VGP(nn.Module):
         if self.training:
             b_sz = s.size()[0]
             kk_inv = self.kernel(xi,s).mm(self.kernel(s,s).inverse())
+            # print('xi', xi)
+            # print('s', s)
+            # print('k_xi_s', self.kernel(xi,s))
+            # print('k_s_s_inv', self.kernel(s,s).inverse())
+            # print('kk_inv', kk_inv)
             K = self.kernel(s,s)
             mu = kk_inv.unsqueeze(1).matmul(t).squeeze(1)
             cov = self.kernel(xi, xi)-kk_inv.mul(self.kernel(s,xi).transpose(0,1))
             # L, piv = torch.pstrf(cov) #cholesky decomposition
             cov_diag = cov.diag()
+            # print('cov_diag', cov_diag.data.numpy())
 
             L = torch.sqrt(cov_diag)
-            print('mu', mu.size(), mu.data.numpy())
-            print('L', L.size(), L.data.numpy())
+            # print('mu', mu.size(), mu.data.numpy())
             eps = Variable(t.data.new(t.size()).normal_())
             f = torch.diag(L).matmul(eps).add(mu)
             return f, mu, cov_diag
@@ -147,7 +153,7 @@ class VGP(nn.Module):
         z = self.reparameterize_nm(z_mean, z_cov)
     
         # r(xi, f|z, x)
-        rxi_mean, rf_mean, log_rxi_cov, log_rf_cov  = self.encode_3(x, z)
+        r_mean, r_cov  = self.encode_3(x, z)
 
         # p(x|z)
         x_mean, x_cov = self.decode(z)
@@ -155,27 +161,30 @@ class VGP(nn.Module):
         # kronecker covariance 
         qf_cov2 = qf_cov.clone().repeat(self.d_dim,1).t()
         
-        kld_loss = self._kld_loss(z_mean, z_cov)+ self._kld_loss_diag(qf_mean, qf_cov2, rf_mean, log_rf_cov)
+        q_mean = torch.cat((qxi_mean,qf_mean), 1)
+        q_cov = torch.cat((log_qxi_cov, qf_cov2.log()),1)
+        
+        kld_loss = self._kld_loss(z_mean, z_cov)+self._kld_loss_diag(q_mean, q_cov, r_mean, r_cov)
 
-        if dist == "gauss":
-            nll_loss = self._rc_loss(x_mean, x)
-        elif dist == "bce":
-            nll_loss = self._bce_loss(x_mean, x) 
-
+        nll_loss = self._nll_loss(x_mean, x_cov, x)
+        # log_q_xi =  self._nll_loss(qxi_mean, log_qxi_cov, xi)
+        # log_r_xi =  self._nll_loss(rxi_mean, log_rxi_cov, xi)
+        # quit()
+        # print('log_q_xi', log_q_xi)
+        # print('log_r_xi', log_r_xi)
+        # nll_loss = nll_loss + log_q_xi - log_r_xi
      
-        log_q_xi =  self._ll_loss(qxi_mean, log_qxi_cov, xi)
-        log_r_xi =  self._ll_loss(rxi_mean, log_rxi_cov, xi)
-
-        nll_loss = nll_loss + log_q_xi - log_r_xi
         return kld_loss, nll_loss,(z_mean, z_cov), (x_mean, x_cov)
 
     def sample_z(self, x):
-        # encoder 
-        f_mean, f_cov = self.encode_1(x)
-        f = self.reparameterize_gp(f_mean, f_cov)
+        # q(f|xi, s, t)
+        xi = Variable(self.s.data.new(self.s.size()).normal_())
+        f, qf_mean, qf_cov = self.reparameterize_gp(xi, self.s, self.t)
 
-        z_mean, z_cov = self.encode_2(f)
+        # q(z|xi, f)
+        z_mean, z_cov = self.encode_2(xi,f)
         z = self.reparameterize_nm(z_mean, z_cov)
+
         return z
 
     def sample_x(self):
@@ -198,10 +207,10 @@ class VGP(nn.Module):
         KLD /= batch_size
         return KLD
 
-    def _kld_loss_diag(self, mu1, s1, mu2, log_s2):
+    def _kld_loss_diag(self, mu1, log_s1, mu2, log_s2):
         s2_inv = log_s2.exp().pow(-1)
 
-        KLD = 0.5 * torch.sum( log_s2 -s1.log() -1 + s2_inv.mul(s1)+ (mu1-mu2).pow(2).mul(s2_inv))
+        KLD = 0.5 * torch.sum( log_s2 - log_s1-1 + s2_inv.mul(log_s1.exp())+ (mu1-mu2).pow(2).mul(s2_inv))
         # Normalise by same number of elements as in reconstruction
         batch_size = mu1.size()[0]
         KLD /= batch_size
@@ -228,12 +237,12 @@ class VGP(nn.Module):
         NLL /= batch_size
         return NLL
 
-    def _ll_loss(self, mean, logcov, x):
-        # log likelihood
-        ll =  -0.5 * (torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2)))
+    def _nll_loss(self, mean, logcov, x):
+        # negative log likelihood
+        nll =  0.5 * (torch.sum( Variable(torch.Tensor([np.pi])).log()+logcov + 1.0/logcov.exp() * (x-mean).pow(2)))
         batch_size = mean.size()[0]
-        ll /= batch_size
-        return ll
+        nll /= batch_size
+        return nll
 
     def _bce_loss(self, recon_x, x):
         BCE = F.binary_cross_entropy(recon_x, x.view(-1, self.x_dim))
