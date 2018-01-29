@@ -5,6 +5,7 @@ import torch.utils.data
 from torch import nn, optim
 from torch.autograd import Variable
 from torch.nn import functional as F
+from torch.nn import Parameter
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 import numpy as np
@@ -44,7 +45,13 @@ class VGP(nn.Module):
         self.fc3 = nn.Linear(z_dim, h_dim)
         self.fc31 = nn.Linear(h_dim, x_dim)
         self.fc32 = nn.Linear(h_dim, x_dim)
+        
+        dat_sz = 5
+        self.s = Parameter(torch.randn(dat_sz, t_dim))
+        self.t = Parameter(torch.randn(dat_sz, d_dim))
 
+        self.sigma = Parameter(torch.FloatTensor([0.01]))
+        self.w = Parameter(torch.ones(t_dim)/t_dim)
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -102,14 +109,12 @@ class VGP(nn.Module):
             # automatic relavance determination kernel
             return w.dot((x-y).pow(2)).mul(-0.5).exp_().mul(sigma.pow(2))
         
-        sigma = Variable(torch.FloatTensor([0.1]), requires_grad=True)
-        w = Variable(torch.ones(x.size()[1]), requires_grad=True)
         b_sz = x.size()[0]
         K = Variable(torch.zeros((b_sz, b_sz)))
      
         for i in range(b_sz):
             for j in range(b_sz):
-                K[i,j] = _ard(x[i,],y[j,], sigma, w)
+                K[i,j] = _ard(x[i,],y[j,], self.sigma, self.w)
         return K
 
     def reparameterize_nm(self, mu, logcov):
@@ -134,11 +139,8 @@ class VGP(nn.Module):
         qxi_mean, log_qxi_cov = self.encode_1(x.view(-1, self.x_dim))
         xi  = self.reparameterize_nm(qxi_mean, log_qxi_cov)
 
-        s = Variable(torch.randn(xi.size()) ,requires_grad=True)
-        t = Variable(torch.randn(xi.size()[0], self.d_dim), requires_grad=True)
-
         # q(f|xi, s, t)
-        f, qf_mean, qf_cov = self.reparameterize_gp(xi, s, t)
+        f, qf_mean, qf_cov = self.reparameterize_gp(xi, self.s, self.t)
 
         # q(z|xi, f)
         z_mean, z_cov = self.encode_2(xi,f)
