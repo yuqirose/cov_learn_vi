@@ -202,8 +202,8 @@ class VGP(nn.Module):
         f, qf_mean, qf_cov = self.reparameterize_gp(xi, self.s, self.t)
 
         # q(z|xi, f)
-        z_mean, z_cov = self.encode_2(xi,f)
-        z = self.reparameterize_nm(z_mean, z_cov)
+        z_mean, z_cov = self.encode_2(f)
+        z = self.reparameterize_lt(z_mean, z_cov)
 
         return z
 
