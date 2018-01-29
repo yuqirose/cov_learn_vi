@@ -11,6 +11,9 @@ from torchvision.utils import save_image
 import numpy as np
 from util.batchutil import bivech2
 from tensor_util import *
+import sys
+sys.path.append("../")
+from util.batchutil import *
 
 
 
@@ -25,6 +28,7 @@ class VGP(nn.Module):
         d_dim = int(x_dim/t_dim)
         self.d_dim = d_dim
         l_dim = int(d_dim * (d_dim+1)/2)
+        self.l_dim = l_dim
         z_dim = t_dim * l_dim
 
         # encode 1: x -> xi (variational data)
@@ -35,7 +39,7 @@ class VGP(nn.Module):
         # encode 2: f -> z
         self.fc2 = nn.Linear(d_dim, h_dim)
         self.fc21 = nn.Linear(h_dim, z_dim) 
-        self.fc22 = nn.Linear(h_dim, t_dim)
+        self.fc22 = nn.Linear(h_dim, int(t_dim*(t_dim+1)/2))
 
         # encode 3: x, z -> r
         self.fc23 = nn.Linear(x_dim + z_dim, h_dim)
@@ -53,6 +57,11 @@ class VGP(nn.Module):
 
         self.sigma = Variable(torch.FloatTensor([0.01]))
         self.w = Variable(torch.ones(t_dim)/t_dim)
+
+        t = torch.linspace(0,2,steps=t_dim+1); t = t[1:]
+        self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-4*torch.eye(t_dim))
+        self.Kh = torch.potrf(self.K)
+        self.iK = torch.potri(self.Kh)
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
@@ -133,6 +142,17 @@ class VGP(nn.Module):
         else:
             return mu
 
+    def reparameterize_lt(self, mu, covh):
+        #  re-paremterize latent dist
+        if self.training:
+            b_sz = mu.size()[0]
+            eps = Variable(mu.data.new(mu.size()).normal_()).view(b_sz,self.t_dim,-1)
+            covh_sqform = bivech(covh)
+            z = covh_sqform.bmm(eps).view(b_sz,-1).add(mu)
+            return z
+        else:
+            return mu
+
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
@@ -150,7 +170,7 @@ class VGP(nn.Module):
 
         # q(z|xi, f)
         z_mean, z_cov = self.encode_2(f)
-        z = self.reparameterize_nm(z_mean, z_cov)
+        z = self.reparameterize_lt(z_mean, z_cov)
     
         # r(xi, f|z, x)
         r_mean, r_cov  = self.encode_3(x, z)
@@ -164,7 +184,7 @@ class VGP(nn.Module):
         q_mean = torch.cat((qxi_mean,qf_mean), 1)
         q_cov = torch.cat((log_qxi_cov, qf_cov2.log()),1)
         
-        kld_loss = self._kld_loss(z_mean, z_cov)+self._kld_loss_diag(q_mean, q_cov, r_mean, r_cov)
+        kld_loss = self._kld_loss_bkdg(z_mean, z_cov)+self._kld_loss_diag(q_mean, q_cov, r_mean, r_cov)
 
         nll_loss = self._nll_loss(x_mean, x_cov, x)
         # log_q_xi =  self._nll_loss(qxi_mean, log_qxi_cov, xi)
@@ -214,6 +234,28 @@ class VGP(nn.Module):
         # Normalise by same number of elements as in reconstruction
         batch_size = mu1.size()[0]
         KLD /= batch_size
+        return KLD
+
+
+    def _kld_loss_bkdg(self, mu, covh):
+        # q(z|x)||p(z), q~N(mu0,S0), p~N(mu1,S1), mu0=mu, S0=cov, mu1=0, S1=I
+        # KLD = 0.5 * ( log det(S1) - log det(S0) -D + trace(S1^-1 S0) + (mu1-mu0)^TS1^-1(mu1-mu0) )
+        
+        cov = bivech2(covh)
+        tr = self.l_dim*torch.sum(torch.mul(self.iK,cov))
+        vechI = Variable(th_vech(torch.eye(self.d_dim))).view(1,1,-1)
+        b_sz = mu.size()[0]
+        I_mu = vechI - mu.view(b_sz,self.t_dim,-1)
+        quad = torch.sum( torch.mul(torch.matmul(self.iK,I_mu), I_mu) )
+        ldet1 = 2*b_sz*self.l_dim*torch.sum(torch.log(self.Kh.diag().abs()))
+#         diag_idx = th_ivech(torch.arange(covh.data.size()[-1])).diag().long()
+        diag_idx = th_ivech(torch.arange(covh.data.size()[-1]))
+        diag_idx = Variable(diag_idx.data.diag().long())
+        ldet0 = 2*self.l_dim*torch.sum(torch.log(torch.index_select(covh,-1,diag_idx).abs()))
+        
+        KLD = 0.5 * ( tr + quad - b_sz*self.t_dim*self.l_dim + ldet1 - ldet0 )
+        # Normalise by same number of elements as in reconstruction
+        KLD /= b_sz
         return KLD
 
     def _kld_loss_mvn(self, mu1, s1, mu2, s2):
