@@ -109,7 +109,7 @@ t_dim = T
 z_dim = D
 n_layers =  1
 clip = 1.10
-is_plot=True
+is_plot=False
 data_set = "synth"
 
 

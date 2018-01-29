@@ -24,7 +24,8 @@ class VGP(nn.Module):
         self.t_dim = t_dim
         d_dim = int(x_dim/t_dim)
         self.d_dim = d_dim
-        z_dim = x_dim
+        l_dim = int(d_dim * (d_dim+1)/2)
+        z_dim = t_dim * l_dim
 
         # encode 1: x -> xi (variational data)
         self.fc1 = nn.Linear(x_dim, h_dim)
@@ -32,9 +33,9 @@ class VGP(nn.Module):
         self.fc12 = nn.Linear(h_dim, t_dim)
          
         # encode 2: f -> z
-        self.fc2 = nn.Linear(t_dim+d_dim, h_dim)
+        self.fc2 = nn.Linear(d_dim, h_dim)
         self.fc21 = nn.Linear(h_dim, z_dim) 
-        self.fc22 = nn.Linear(h_dim, z_dim)
+        self.fc22 = nn.Linear(h_dim, t_dim)
 
         # encode 3: x, z -> r
         self.fc23 = nn.Linear(x_dim + z_dim, h_dim)
@@ -64,10 +65,9 @@ class VGP(nn.Module):
         xi_cov = self.fc12(h1)
         return xi_mean, xi_cov
 
-    def encode_2(self, xi, f):
+    def encode_2(self, f):
         # [xi, f] - > z  
-        inp = torch.cat((xi, f), 1)
-        h2 = self.relu(self.fc2(inp))
+        h2 = self.relu(self.fc2(f))
         z_mean = self.fc21(h2)
         z_cov = self.fc22(h2)
         return z_mean, z_cov
@@ -95,7 +95,7 @@ class VGP(nn.Module):
             # print('kk_inv', kk_inv)
             K = self.kernel(s,s)
             mu = kk_inv.unsqueeze(1).matmul(t).squeeze(1)
-            cov = self.kernel(xi, xi)-kk_inv.mul(self.kernel(s,xi).transpose(0,1))
+            cov = self.kernel(xi, xi)-kk_inv.mm(self.kernel(s,xi))
             # L, piv = torch.pstrf(cov) #cholesky decomposition
             cov_diag = cov.diag()
             # print('cov_diag', cov_diag.data.numpy())
@@ -149,7 +149,7 @@ class VGP(nn.Module):
         f, qf_mean, qf_cov = self.reparameterize_gp(xi, self.s, self.t)
 
         # q(z|xi, f)
-        z_mean, z_cov = self.encode_2(xi,f)
+        z_mean, z_cov = self.encode_2(f)
         z = self.reparameterize_nm(z_mean, z_cov)
     
         # r(xi, f|z, x)
