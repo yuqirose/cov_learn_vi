@@ -13,6 +13,7 @@ from vae import VAE
 from reader import SynthDataset
 from plot import plot_ts
 import matplotlib.pyplot as plt 
+plt.switch_backend('agg')
 import visdom 
 
 
@@ -117,7 +118,7 @@ data_set = "synth"
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
 parser.add_argument('--batch-size', type=int, default=50, metavar='N',
                     help='input batch size for training (default: 20)')
-parser.add_argument('--epochs', type=int, default=500, metavar='N',
+parser.add_argument('--epochs', type=int, default=200, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
