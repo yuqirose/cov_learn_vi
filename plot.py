@@ -4,7 +4,8 @@ Jan, 2018 Rose Yu @Caltech
 """
 import matplotlib.pyplot as plt 
 import seaborn as sns
-from util.matutil import ivech2x, vechx
+from util.matutil import *
+from util.batchutil import *
 
 def plot_img():
     """ 
@@ -33,16 +34,16 @@ def plot_kde():
     plt.pause(1e-6)
     plt.gcf().clear()
 
-def plot_ts(data, dec_mean):
+def plot_ts(data, enc_mean):
     """
     plot time series with uncertainty
     """
     # enc_mean, enc_cov = enc
     # dec_mean, dec_cov = dec
 
-    batch_size = dec_mean.size()[0]
-    N = 200
+    batch_size = data.size()[0]
     D = 2
+    N = int(data.size()[1]/D)
 
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
     # plot data
@@ -51,10 +52,16 @@ def plot_ts(data, dec_mean):
 
     # plot reconstruction
     plt.axes(ax2)
-    sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
+    # sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
+
+
+    sample_Sigma = bivech2(enc_mean.view(batch_size,N,-1))
+    sample_vechSigma = bvech(sample_Sigma).data.numpy()
     
+    sns.tsplot(sample_vechSigma)
+
     # plot latent variables
     # sample_Sigma = ivech2x(enc_cov.data.numpy())
     # sample_vechSigma = vechx(sample_Sigma.reshape((-1,N,N)))
     # sns.tsplot(sample_vechSigma)
-
+     

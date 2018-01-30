@@ -59,10 +59,12 @@ def train(epoch):
         z = model.sample_z(data)
 
         plot_ts(data, z)
+        if epoch%5==0:
+            plt.savefig('plot/z_'+str(epoch)+'.png')
         # plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
-        plt.show(block=False)
-        plt.pause(1e-6)
-        plt.close()
+        # plt.show(block=False)
+        # plt.pause(1e-6)
+        # plt.close()
 
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
@@ -100,7 +102,7 @@ def test(epoch):
 
 
 #hyperparameters
-T = 200 
+T = 200
 D = 2
 x_dim = T*D #28*28 
 h_dim = 10
@@ -113,9 +115,9 @@ data_set = "synth"
 
 
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
-parser.add_argument('--batch-size', type=int, default=5, metavar='N',
+parser.add_argument('--batch-size', type=int, default=50, metavar='N',
                     help='input batch size for training (default: 20)')
-parser.add_argument('--epochs', type=int, default=100, metavar='N',
+parser.add_argument('--epochs', type=int, default=500, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -160,7 +162,7 @@ elif data_set == "mnist":
 
 
 model = VAE(x_dim, h_dim, t_dim)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-2)
 
 for epoch in range(1, args.epochs + 1):
     
@@ -173,10 +175,10 @@ for epoch in range(1, args.epochs + 1):
 
     #saving model
 
-    if epoch % args.log_interval == 1:
-        fn = 'saves/vae_state_dict_'+str(epoch)+'.pth'
-        torch.save(model.state_dict(), fn)
-        print('Saved model to '+fn)
+    # if epoch % args.log_interval == 1:
+    #     fn = 'saves/vae_state_dict_'+str(epoch)+'.pth'
+    #     torch.save(model.state_dict(), fn)
+    #     print('Saved model to '+fn)
 
 
 

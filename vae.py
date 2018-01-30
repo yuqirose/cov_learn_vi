@@ -93,7 +93,7 @@ class VAE(nn.Module):
 
         kld_loss = self._kld_loss_bkdg(enc_mean, enc_cov)
         if dist == "gauss":
-            nll_loss = self._nll_loss(dec_mean, x)
+            nll_loss = self._nll_loss(dec_mean, dec_cov, x)
         elif dist == "bce":
             nll_loss = self._bce_loss(dec_mean, x)
 
@@ -144,15 +144,14 @@ class VAE(nn.Module):
         KLD /= b_sz
         return KLD
 
-    def _nll_loss(self, mean, x): 
+    def _nll_loss(self, mean, logcov, x): 
         # 0.5 * log det (x) + mu s
         # take one sample, reconstruction loss
         # print('mean', mean)
         # print('x', x)
-        criterion = nn.MSELoss()
-
-        NLL = criterion(mean, x)
-        # NLL= 0.5 * torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2))
+        # criterion = nn.MSELoss()
+        # NLL = criterion(mean, x)
+        NLL= 0.5 * torch.sum( logcov + 1.0/logcov.exp() * (x-mean).pow(2) + np.log(2*np.pi) )
         batch_size = mean.size()[0]
         NLL /= batch_size
         return NLL
