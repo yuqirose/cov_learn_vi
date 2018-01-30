@@ -79,8 +79,8 @@ class VAE(nn.Module):
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
-        dec_mean = self.sigmoid(self.fc41(h3))
-        dec_cov = self.sigmoid(self.fc42(h3))
+        dec_mean = self.fc41(h3)
+        dec_cov = self.fc42(h3)
         return dec_mean, dec_cov
 
     def forward(self, x, dist):
@@ -147,8 +147,6 @@ class VAE(nn.Module):
     def _nll_loss(self, mean, logcov, x): 
         # 0.5 * log det (x) + mu s
         # take one sample, reconstruction loss
-        # print('mean', mean)
-        # print('x', x)
         # criterion = nn.MSELoss()
         # NLL = criterion(mean, x)
         NLL= 0.5 * torch.sum( logcov + 1.0/logcov.exp() * (x-mean).pow(2) + np.log(2*np.pi) )
