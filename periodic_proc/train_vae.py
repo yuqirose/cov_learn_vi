@@ -14,6 +14,7 @@ from syn_period import SynthDataset
 import sys
 sys.path.append("../")
 from util.matutil import *
+from util.batchutil import *
 
 """implementation of the Variational Recurrent
 Neural Network (VRNN) from https://arxiv.org/abs/1506.02216
@@ -23,11 +24,14 @@ inference, prior, and generating models."""
 """
 Modified by
 Shiwei Lan @ CalTech, 2018
-version 1.0
+version 1.1
 """
 
 def train(epoch):
     train_loss = 0
+    
+    if is_plot:
+        f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
 
     for batch_idx, (data, _) in enumerate(train_loader):
 
@@ -37,7 +41,8 @@ def train(epoch):
         #data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
         #forward + backward + optimize
-        optimizer = optim.Adam(model.parameters(), lr=1e-3)
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        if epoch>=20: optimizer = optim.Adam(model.parameters(), lr=learning_rate/2)
         optimizer.zero_grad()
         kld_loss, nll_loss,(enc_mean, enc_cov), (dec_mean, dec_cov) = model(data)
         
@@ -60,25 +65,33 @@ def train(epoch):
 
             # plot the data and reconstruction
             if is_plot:
-                f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
+#                 f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
                 # plot reconstruction
-                plt.axes(ax1)
-                sns.tsplot(data.view(batch_size,N,-1).data.numpy())
+                plt.axes(ax1); ax1.clear()
+                sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
+#                 # plot reconstruction error
+#                 reconst_err = data - dec_mean # not a good measure
+#                 sns.tsplot(reconst_err.view(batch_size,N,-1).data.numpy())
                 # plot latent variables
-                plt.axes(ax2)
+                plt.axes(ax2); ax2.clear()
 #                 sample_L = model.sample_z(data).reshape((batch_size,N,-1))
-                sample_L = enc_mean.view(batch_size,N,-1).data.numpy()
-                sample_Sigma = ivech2x(sample_L)
-                sample_vechSigma = vechx(sample_Sigma.reshape((-1,D,D))).reshape((batch_size,N,-1))
+                
+#                 sample_L = enc_mean.view(batch_size,N,-1).data.numpy()
+#                 sample_Sigma = ivech2x(sample_L)
+#                 sample_vechSigma = vechx(sample_Sigma.reshape((-1,D,D))).reshape((batch_size,N,-1))
+                
+                sample_Sigma = bivech2(enc_mean.view(batch_size,N,-1))
+                sample_vechSigma = bvech(sample_Sigma).data.numpy()
+                
                 sns.tsplot(sample_vechSigma)
                 
                 plt.show()
                 plt.pause(1e-4)
-                plt.gcf().clear()
+#                 plt.gcf().clear()
 
         train_loss += loss.data[0]
 
-
+    plt.close() # to avoid opening too many figure windows
     print('====> Epoch: {} Average loss: {:.4f}'.format(
         epoch, train_loss / len(train_loader.dataset)))
 
@@ -101,7 +114,7 @@ def test(epoch):
     for i, (data, _) in enumerate(test_loader):                                            
         
         data = Variable(data)
-        # data = Variable(data.squeeze().tr anspose(0, 1))
+        # data = Variable(data.squeeze().transpose(0, 1))
         # data = (data - data.min().data[0]) / (data.max().data[0] - data.min().data[0])
 
         kld_loss, nll_loss, _, _ = model(data)
@@ -123,7 +136,7 @@ z_dim = np.int(N*D*(D+1)/2)
 n_layers =  1
 n_epochs = 100
 clip = 10
-learning_rate = 1e-2
+learning_rate = 2e-3
 batch_size = 20
 seed = 128
 print_every = 5
@@ -150,7 +163,7 @@ test_loader = torch.utils.data.DataLoader(
 
 
 model = VAE(x_dim, h_dim, z_dim)
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+# optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 for epoch in range(1, n_epochs + 1):
     

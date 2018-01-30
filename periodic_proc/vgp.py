@@ -34,13 +34,13 @@ class VGP(nn.Module):
         z_dim = t_dim*d2h_dim
         self.z_dim = z_dim
         # source-target dimensions of GP draws
-        f_in = t_dim; self.f_in = f_in
-        f_out = t_dim; self.f_out = f_out
+        f_in = 20; self.f_in = f_in
+        f_out = 100; self.f_out = f_out
 
-        # encode 1: x -> (s,t) (variational data)
+        # encode 1: x -> s,t (variational data)
         self.fc1 = nn.Linear(x_dim, h_dim)
-        self.fc11 = nn.Linear(h_dim, t_dim)
-        self.fc12 = nn.Linear(h_dim, t_dim)
+        self.fc11 = nn.Linear(h_dim, f_in)
+        self.fc12 = nn.Linear(h_dim, f_out)
          
         # encode 2: f -> z
         self.fc2 = nn.Linear(f_out, h_dim)
@@ -99,14 +99,14 @@ class VGP(nn.Module):
         if self.training:
             b_sz = s.size()[0]
             K_xis = self.kernel(xi,s)
-            kk_inv = K_xis.mm(self.kernel(s,s).inverse())
-#             K = self.kernel(s,s)
+            K_ss = self.kernel(s,s) + Variable(1e-5*torch.eye(b_sz))
+            kk_inv = K_xis.mm(K_ss.inverse())
             mu = kk_inv.unsqueeze(1).matmul(t).squeeze(1)
 #             cov = self.kernel(xi, xi)-kk_inv.mm(self.kernel(s,xi))
 #             # L, piv = torch.pstrf(cov) #cholesky decomposition
 #             cov_diag = cov.diag()
             cov_diag = self.kernel(xi, xi).diag() - torch.sum(kk_inv.mul(K_xis),1)
-            print(cov_diag.data.numpy())
+#             print(cov_diag.data.numpy())
             L = torch.sqrt(cov_diag)
             eps = Variable(t.data.new(t.size()).normal_())
             f = torch.diag(L).matmul(eps).add(mu)
@@ -179,9 +179,10 @@ class VGP(nn.Module):
 
         q_xi = torch.distributions.Normal(torch.zeros(xi.size()), torch.ones(xi.size()))
         log_q_xi =  q_xi.log_prob(xi.data).sum()
-        log_r_xi = self._nll_loss(xi_mean, xi_lcov, xi)
+        nlog_r_xi = self._nll_loss(xi_mean, xi_lcov, xi)
+#         print('log_r_xi: ',log_r_xi.data.numpy())
 
-        nll_loss = nll_loss + log_q_xi - log_r_xi
+        nll_loss = nll_loss + log_q_xi + nlog_r_xi
         return kld_loss, nll_loss,(z_mean, z_covh), (x_mean, x_lcov)
 
     def sample_z(self, x):
@@ -236,7 +237,7 @@ class VGP(nn.Module):
         return KLD
 
     def _kld_loss_diag(self, mu0, ls0, mu1, ls1):
-        s1_inv = ls1.mul(-1).exp()
+        s1_inv = ls1.mul(-1.0).exp()
         KLD = 0.5 * torch.sum( ls1 -ls0 -1 + s1_inv.mul(ls0.exp())+ (mu0-mu1).pow(2).mul(s1_inv) )
         # Normalise by same number of elements as in reconstruction
         b_sz = mu0.size()[0]

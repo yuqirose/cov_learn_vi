@@ -16,7 +16,7 @@ from util.batchutil import *
 """
 Modified by
 Shiwei Lan @ CalTech, 2018
-version 1.1
+version 1.3
 """
 
 class VAE(nn.Module):
@@ -48,7 +48,7 @@ class VAE(nn.Module):
         self.N = np.int(self.x_dim/self.D)
         # GP kernel
         t = torch.linspace(0,2,steps=self.N+1); t = t[1:]
-        self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-5*torch.eye(self.N))
+        self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-4*torch.eye(self.N))
         self.Kh = torch.potrf(self.K)
 #         self.iK = Variable(torch.inverse(self.K.data))
         self.iK = torch.potri(self.Kh)
@@ -76,7 +76,6 @@ class VAE(nn.Module):
 
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
-        # TODO: try hard decode -- without nn
         h3 = self.relu(self.fc3(z))
         dec_mean = self.fc41(h3)
         dec_cov = self.fc42(h3)
@@ -114,40 +113,32 @@ class VAE(nn.Module):
 
     def _kld_loss(self, mu, covh):
         # q(z|x)||p(z), q~N(mu0,S0), p~N(mu1,S1), mu0=mu, S0=cov, mu1=0, S1=I
-        # KLD = 0.5 * [ log det(S1) - log det(S0) -D + trace(S1^-1 S0) + (mu0-mu1)^TS1^-1(mu0-mu1) ]
-        # 
+        # KLD = 0.5 * ( log det(S1) - log det(S0) -D + trace(S1^-1 S0) + (mu1-mu0)^TS1^-1(mu1-mu0) )
+        
         cov = bivech2(covh)
         D_star = np.int(self.D*(self.D+1)/2)
-        tr0 = D_star*torch.sum(torch.mul(self.iK,cov))
+        tr = D_star*torch.sum(torch.mul(self.iK,cov))
         vechI = Variable(th_vech(torch.eye(self.D))).view(1,1,-1)
         b_sz = mu.size()[0]
         I_mu = vechI - mu.view(b_sz,self.N,-1)
-        tr1 = torch.sum( torch.mul(torch.matmul(self.iK,I_mu), I_mu) )
-        ldet0 = 2*b_sz*D_star*torch.sum(torch.log(self.Kh.diag().abs()))
-#         diag_idx = th_ivech(torch.arange(covh.data.size()[1])).diag().long()
-        diag_idx = th_ivech(torch.arange(covh.data.size()[1]))
+        quad = torch.sum( torch.mul(torch.matmul(self.iK,I_mu), I_mu) )
+        ldet1 = 2*b_sz*D_star*torch.sum(torch.log(self.Kh.diag().abs()))
+#         diag_idx = th_ivech(torch.arange(covh.data.size()[-1])).diag().long()
+        diag_idx = th_ivech(torch.arange(covh.data.size()[-1]))
         diag_idx = Variable(diag_idx.data.diag().long())
-        ldet1 = 2*D_star*torch.sum(torch.log(torch.index_select(covh,1,diag_idx).abs()))
+        ldet0 = 2*D_star*torch.sum(torch.log(torch.index_select(covh,-1,diag_idx).abs()))
         
-        KLD = 0.5 * ( tr0 + tr1 - b_sz*self.N*D_star + ldet0 - ldet1 )
+        KLD = 0.5 * ( tr + quad - b_sz*self.N*D_star + ldet1 - ldet0 )
         # Normalise by same number of elements as in reconstruction
         KLD /= b_sz
         return KLD
     
-    def _nll_loss(self, mean, cov, x): 
-        # 0.5 * log det (x) + mu s
+    def _nll_loss(self, mean, logcov, x): 
+        # log det (covh) + 0.5 (x-mu)' cov^(-1) (x-mu)
         # take one sample, reconstruction loss
-        # print('mean', mean)
-        # print('x', x)
-        criterion = nn.MSELoss()
- 
-        NLL = criterion(mean, x)
-        # NLL= 0.5 * torch.sum( mean.size()[1]*logcov + 1.0/logcov.exp() * (x-mean).pow(2))
-        # TODO: hard decode x
-#         NLL = 0;
-#         for n in range(z.shape[0]):
-#             z_n = ivech(z[n,:])
-#             NLL += np.sum(np.log(np.abs(np.diag(z_n)))) + .5* np.sum(np.solve(z_n, x.T).faltten())
+#         criterion = nn.MSELoss()
+#         NLL = criterion(mean, x)
+        NLL= 0.5 * torch.sum( logcov + 1.0/logcov.exp() * (x-mean).pow(2) + np.log(2*np.pi) )
         
         b_sz = mean.size()[0]
         NLL /= b_sz

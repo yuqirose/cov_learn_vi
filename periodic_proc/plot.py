@@ -59,9 +59,9 @@ def plot_ts(data, dec_mean):
     # sample_vechSigma = vechx(sample_Sigma.reshape((-1,N,N)))
     # sns.tsplot(sample_vechSigma)
 
-def plot_lt(data, enc_mean):
+def plot_lt(dec_mean, enc_mean):
     """
-    plot latent variables
+    plot reconstruction data and latent variables
     """
     
     batch_size = enc_mean.size()[0]
@@ -70,14 +70,15 @@ def plot_lt(data, enc_mean):
 
     f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
     # plot data
-    plt.axes(ax1)
-    sns.tsplot(data.view(batch_size,N,-1).data.numpy())
+#     plt.axes(ax1)
+#     sns.tsplot(data.view(batch_size,N,-1).data.numpy())
 
 #     # plot reconstruction
-#     plt.axes(ax2)
-#     sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
+    plt.axes(ax1)
+    sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
     
     # plot latent variables
+    plt.axes(ax2)
     sample_Sigma = bivech2(enc_mean.view(batch_size,N,-1))
     sample_vechSigma = bvech(sample_Sigma).data.numpy()
     sns.tsplot(sample_vechSigma)

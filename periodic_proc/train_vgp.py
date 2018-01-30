@@ -12,7 +12,7 @@ from torchvision.utils import save_image
 from vae import VAE
 from vgp import VGP
 from reader import SynthDataset
-from plot import plot_ts
+from plot import *
 import matplotlib.pyplot as plt 
 # import visdom 
 import sys
@@ -41,6 +41,8 @@ def train(epoch):
         # print('data shape', data[0,].shape)
 
         #forward + backward + optimize
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        if epoch>=20: optimizer = optim.Adam(model.parameters(), lr=learning_rate/2)
         optimizer.zero_grad()
         kld_loss, nll_loss, (enc_mean, enc_cov), (dec_mean, dec_cov) = model(data, 'gauss')
         
@@ -65,10 +67,10 @@ def train(epoch):
 
         # plot the data and reconstruction
         if is_plot:
-            z = model.sample_z(data)
-            plot_ts(data, z)
-#             plot_ts(data, enc_mean)
+#             z = model.sample_z(data)
+#             plot_ts(data, z)
             # plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
+            plot_lt(dec_mean, enc_mean)
             plt.show(block=False)
             plt.pause(1e-6)
             plt.close()
@@ -116,6 +118,7 @@ h_dim = 100
 t_dim = T
 z_dim = D
 n_layers =  1
+learning_rate = 4e-3
 clip = 1.10
 is_plot=True
 data_set = "synth"
@@ -169,7 +172,7 @@ elif data_set == "mnist":
 
 
 model = VGP(x_dim, h_dim, t_dim)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+# optimizer = optim.Adam(model.parameters(), lr=4e-3)
 
 for epoch in range(1, args.epochs + 1):
     
