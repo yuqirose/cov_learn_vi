@@ -57,9 +57,8 @@ def train(epoch):
 
     # plot the data and reconstruction
     if is_plot:
-        z = model.sample_z(data)
-
-        plot_ts(data, z)
+        #z = model.sample_z(data)
+        plot_ts(data, enc_mean)
         if epoch%5==0:
             plt.savefig('plot/z_'+str(epoch)+'.png')
         # plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
@@ -106,7 +105,7 @@ def test(epoch):
 T = 200
 D = 2
 x_dim = T*D #28*28 
-h_dim = 10
+h_dim = 200
 t_dim = T
 z_dim = D
 n_layers =  1
