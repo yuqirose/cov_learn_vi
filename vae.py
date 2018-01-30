@@ -8,6 +8,9 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 import numpy as np
+import sys
+sys.path.append("../")
+from util.batchutil import *
 
 
 class VAE(nn.Module):
@@ -66,7 +69,7 @@ class VAE(nn.Module):
         # decoder
         dec_mean, dec_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(enc_mean, enc_cov)
+        kld_loss = self._kld_loss_bkdg(enc_mean, enc_cov)
         if dist == "gauss":
             nll_loss = self._nll_loss(dec_mean, x)
         elif dist == "bce":
@@ -97,6 +100,27 @@ class VAE(nn.Module):
         KLD /= batch_size * self.x_dim
         return KLD
 
+
+    def _kld_loss_bkdg(self, mu, covh):
+        # q(z|x)||p(z), q~N(mu0,S0), p~N(mu1,S1), mu0=mu, S0=cov, mu1=0, S1=I
+        # KLD = 0.5 * ( log det(S1) - log det(S0) -D + trace(S1^-1 S0) + (mu1-mu0)^TS1^-1(mu1-mu0) )
+        
+        cov = bivech2(covh)
+        tr = self.l_dim*torch.sum(torch.mul(self.iK,cov))
+        vechI = Variable(th_vech(torch.eye(self.d_dim))).view(1,1,-1)
+        b_sz = mu.size()[0]
+        I_mu = vechI - mu.view(b_sz,self.t_dim,-1)
+        quad = torch.sum( torch.mul(torch.matmul(self.iK,I_mu), I_mu) )
+        ldet1 = 2*b_sz*self.l_dim*torch.sum(torch.log(self.Kh.diag().abs()))
+    #         diag_idx = th_ivech(torch.arange(covh.data.size()[-1])).diag().long()
+        diag_idx = th_ivech(torch.arange(covh.data.size()[-1]))
+        diag_idx = Variable(diag_idx.data.diag().long())
+        ldet0 = 2*self.l_dim*torch.sum(torch.log(torch.index_select(covh,-1,diag_idx).abs()))
+        
+        KLD = 0.5 * ( tr + quad - b_sz*self.t_dim*self.l_dim + ldet1 - ldet0 )
+        # Normalise by same number of elements as in reconstruction
+        KLD /= b_sz
+        return KLD
 
     def _nll_loss(self, mean, x): 
         # 0.5 * log det (x) + mu s
