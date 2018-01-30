@@ -2,7 +2,7 @@
 """
 Batch utilities for matrix transformation
 Shiwei Lan @ Caltech, Jan. 2018
-version 0.2
+version 0.3
 """
 
 import numpy as np
@@ -111,12 +111,41 @@ def bivech2(vechL, order='row'):
     
     return Sigma
 
-def tril_mask(value):
-    n = value.size(-1)
-    coords = value.new(n)
-    torch.arange(n, out=coords)
-    return coords <= coords.view(n, 1)
+def bpotrs(b, u, upper=True, out=None):
+    """ batch solve a linear system of equations """
+    "with a positive semidefinite matrix to be inverted given its given a Cholesky factor matrix"
+    "RuntimeError: the derivative for 'potri' is not implemented"
+    
+    s = u.size() # (m,N,D,D)
+    D = s[-1]
+    
+    b_view = b.view(-1,D) # (mN, D)
+    u_view = u.view((-1,)+s[-2:])
+    c = Variable(b_view.data.new(b_view.size()))
+    for i in range(c.size()[0]):
+        c[i,:] = torch.potrs(b_view[i,:],u_view[i,:,:],upper)
+    
+    if out:
+        out = c.view(b.size())
+    else:
+        return c.view(b.size())
 
+def bgesv(B, A, upper=True, out=None):
+    """ batch solve a linear system of equations represented by AX=B """
+    
+    s = A.size() # (m,N,D,D)
+    D = s[-1]
+    
+    B_view = B.view(-1,D) # (mN, D)
+    A_view = A.view((-1,)+s[-2:])
+    X = Variable(B_view.data.new(B_view.size()))
+    for i in range(X.size()[0]):
+        X[i,:],_ = torch.gesv(B_view[i,:],A_view[i,:,:])
+    
+    if out:
+        out = X.view(B.size())
+    else:
+        return X.view(B.size())
 
 if __name__=='__main__':
     torch.manual_seed(2018)
@@ -138,3 +167,7 @@ if __name__=='__main__':
     print(vv)
     Sigma=bivech2(vv)
     print(Sigma)
+    
+    b=Variable(torch.randn(m,N,D))
+    iSigmab=bpotrs(b, L, False)
+    print(iSigmab)
