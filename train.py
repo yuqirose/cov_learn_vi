@@ -10,7 +10,6 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 from torchvision.utils import save_image
 from vae import VAE
-from vgp import VGP
 from reader import SynthDataset
 from plot import plot_ts
 import matplotlib.pyplot as plt 
@@ -160,7 +159,7 @@ elif data_set == "mnist":
 
 
 
-model = VGP(x_dim, h_dim, t_dim)
+model = VAE(x_dim, h_dim, t_dim)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(1, args.epochs + 1):

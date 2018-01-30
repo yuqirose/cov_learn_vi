@@ -14,17 +14,24 @@ from util.batchutil import *
 
 
 class VAE(nn.Module):
-    def __init__(self, x_dim, h_dim, z_dim):
+    def __init__(self, x_dim, h_dim, t_dim):
         super(VAE, self).__init__()
 
         self.x_dim = x_dim
         self.h_dim = h_dim
+        self.t_dim = t_dim
+        d_dim = int(x_dim/t_dim)
+        self.d_dim = d_dim
+        l_dim = int(d_dim * (d_dim+1)/2)
+        self.l_dim = l_dim
+        z_dim = t_dim * l_dim
         self.z_dim = z_dim
+
         # feature
         self.fc0 = nn.Linear(x_dim, h_dim)
         # encode
         self.fc21 = nn.Linear(h_dim, z_dim)
-        self.fc22 = nn.Linear(h_dim, z_dim)
+        self.fc22 = nn.Linear(h_dim, int(t_dim*(t_dim+1)/2))
         # transform
         self.fc3 = nn.Linear(z_dim, h_dim)
         # decode
@@ -34,6 +41,10 @@ class VAE(nn.Module):
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
+        t = torch.linspace(0,2,steps=t_dim+1); t = t[1:]
+        self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-4*torch.eye(t_dim))
+        self.Kh = torch.potrf(self.K)
+        self.iK = torch.potri(self.Kh)
 
     def encode(self, x):
         """ p(z|x)
@@ -54,6 +65,17 @@ class VAE(nn.Module):
         else:
             return mu
 
+    def reparameterize_lt(self, mu, covh):
+        #  re-paremterize latent dist
+        if self.training:
+            b_sz = mu.size()[0]
+            eps = Variable(mu.data.new(mu.size()).normal_()).view(b_sz,self.t_dim,-1)
+            covh_sqform = bivech(covh)
+            z = covh_sqform.bmm(eps).view(b_sz,-1).add(mu)
+            return z
+        else:
+            return mu
+
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
@@ -64,7 +86,7 @@ class VAE(nn.Module):
     def forward(self, x, dist):
         # encoder 
         enc_mean, enc_cov = self.encode(x.view(-1, self.x_dim))
-        z = self.reparameterize(enc_mean, enc_cov)
+        z = self.reparameterize_lt(enc_mean, enc_cov)
 
         # decoder
         dec_mean, dec_cov = self.decode(z)
@@ -80,8 +102,8 @@ class VAE(nn.Module):
     def sample_z(self, x):
         # encoder 
         enc_mean, enc_cov = self.encode(x.view(-1, self.x_dim))
-        z = self.reparameterize(enc_mean, enc_cov)
-        return z.data.numpy()
+        z = self.reparameterize_lt(enc_mean, enc_cov)
+        return z
 
     def sample_x(self):
         means = []
