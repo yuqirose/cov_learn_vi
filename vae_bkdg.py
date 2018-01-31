@@ -31,7 +31,7 @@ class VAE(nn.Module):
         self.fc0 = nn.Linear(x_dim, h_dim)
         # encode
         self.fc21 = nn.Linear(h_dim, z_dim)
-        self.fc22 = nn.Linear(h_dim, z_dim)
+        self.fc22 = nn.Linear(h_dim, int(t_dim*(t_dim+1)/2))
         # transform
         self.fc3 = nn.Linear(z_dim, h_dim)
         # decode
@@ -41,6 +41,7 @@ class VAE(nn.Module):
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
+
         t = torch.linspace(0,2,steps=t_dim+1); t = t[1:]
         self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-4*torch.eye(t_dim))
         self.Kh = torch.potrf(self.K)
@@ -65,6 +66,17 @@ class VAE(nn.Module):
         else:
             return mu
 
+    def reparameterize_lt(self, mu, covh):
+        #  re-paremterize latent dist
+        if self.training:
+            b_sz = mu.size()[0]
+            eps = Variable(mu.data.new(mu.size()).normal_()).view(b_sz,self.t_dim,-1)
+            covh_sqform = bivech(covh)
+            z = covh_sqform.bmm(eps).view(b_sz,-1).add(mu)
+            return z
+        else:
+            return mu
+
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
         h3 = self.relu(self.fc3(z))
@@ -75,12 +87,12 @@ class VAE(nn.Module):
     def forward(self, x, dist):
         # encoder 
         enc_mean, enc_cov = self.encode(x.view(-1, self.x_dim))
-        z = self.reparameterize(enc_mean, enc_cov)
+        z = self.reparameterize_lt(enc_mean, enc_cov)
 
         # decoder
         dec_mean, dec_cov = self.decode(z)
 
-        kld_loss = self._kld_loss(enc_mean, enc_cov)
+        kld_loss = self._kld_loss_bkdg(enc_mean, enc_cov)
         if dist == "gauss":
             nll_loss = self._nll_loss(dec_mean, dec_cov, x)
         elif dist == "bce":
@@ -109,6 +121,28 @@ class VAE(nn.Module):
         # Normalise by same number of elements as in reconstruction
         batch_size = mu.size()[0]
         KLD /= batch_size * self.x_dim
+        return KLD
+
+
+    def _kld_loss_bkdg(self, mu, covh):
+        # q(z|x)||p(z), q~N(mu0,S0), p~N(mu1,S1), mu0=mu, S0=cov, mu1=0, S1=I
+        # KLD = 0.5 * ( log det(S1) - log det(S0) -D + trace(S1^-1 S0) + (mu1-mu0)^TS1^-1(mu1-mu0) )
+        
+        cov = bivech2(covh)
+        tr = self.d_dim*torch.sum(torch.mul(self.iK,cov))
+        vechI = Variable(th_vech(torch.eye(self.d_dim))).view(1,1,-1)
+        b_sz = mu.size()[0]
+        I_mu = vechI - mu.view(b_sz,self.t_dim,-1)
+        quad = torch.sum( torch.mul(torch.matmul(self.iK,I_mu), I_mu) )
+        ldet1 = 2*b_sz*self.d_dim*torch.sum(self.Kh.diag().abs().log())
+    #         diag_idx = th_ivech(torch.arange(covh.data.size()[-1])).diag().long()
+        diag_idx = th_ivech(torch.arange(covh.data.size()[-1]))
+        diag_idx = Variable(diag_idx.data.diag().long())
+        ldet0 = 2*self.d_dim*torch.sum(torch.log(torch.index_select(covh,-1,diag_idx).abs()))
+    
+        KLD = 0.5 * ( tr + quad - b_sz*self.t_dim*self.l_dim + ldet1 - ldet0 )
+        # Normalise by same number of elements as in reconstruction
+        KLD /= b_sz
         return KLD
 
     def _nll_loss(self, mean, logcov, x): 

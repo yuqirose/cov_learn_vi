@@ -4,16 +4,17 @@ import argparse
 import torch
 import torch.nn as nn
 from torch import optim
+from torch.optim.lr_scheduler import MultiStepLR
 import torch.utils
 import torch.utils.data
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 from torchvision.utils import save_image
-from vae import VAE
+from vae_bkdg import VAE
 from reader import SynthDataset
 from plot import plot_ts
 import matplotlib.pyplot as plt 
-plt.switch_backend('agg')
+# plt.switch_backend('agg')
 import visdom 
 
 
@@ -58,13 +59,12 @@ def train(epoch):
     # plot the data and reconstruction
     if is_plot:
         #z = model.sample_z(data)
-        plot_ts(data, enc_mean)
-        if epoch%5==0:
-            plt.savefig('plot/z_'+str(epoch)+'.png')
-        # plot_ts(data, (enc_mean, enc_cov),(dec_mean, dec_cov))
-        # plt.show(block=False)
-        # plt.pause(1e-6)
-        # plt.close()
+        plot_ts(data, enc_mean, dec_mean)
+        # if epoch%5==0:
+        #     plt.savefig('plot/z_'+str(epoch)+'.png')
+        plt.show(block=False)
+        plt.pause(1e-6)
+        plt.close()
 
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
@@ -97,7 +97,7 @@ def test(epoch):
   # log-odds
     ll = torch.distributions.Normal(dec_mean, 1.0)
     nll = -torch.sum(ll.log_prob(data.view(-1, x_dim)))/(args.batch_size)
-    print('test log likelihood', nll.data)
+    print('test log likelihood:', nll.data.numpy())
 
 
 
@@ -105,13 +105,14 @@ def test(epoch):
 T = 200
 D = 2
 x_dim = T*D #28*28 
-h_dim = 200
+h_dim = 100
 t_dim = T
 z_dim = D
 n_layers =  1
 clip = 1.10
 is_plot=True
 data_set = "synth"
+lr = 2e-3
 
 
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
@@ -162,10 +163,11 @@ elif data_set == "mnist":
 
 
 model = VAE(x_dim, h_dim, t_dim)
-optimizer = optim.Adam(model.parameters(), lr=1e-2)
+optimizer = optim.Adam(model.parameters(), lr=lr)
+scheduler = MultiStepLR(optimizer, milestones=[20,40], gamma=0.1)
 
 for epoch in range(1, args.epochs + 1):
-    
+    scheduler.step()
     #training + testing
     train(epoch)
     test(epoch)

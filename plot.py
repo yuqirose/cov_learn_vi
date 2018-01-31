@@ -34,7 +34,7 @@ def plot_kde():
     plt.pause(1e-6)
     plt.gcf().clear()
 
-def plot_ts(data, enc_mean):
+def plot_ts(data, enc_mean, dec_mean):
     """
     plot time series with uncertainty
     """
@@ -45,16 +45,16 @@ def plot_ts(data, enc_mean):
     D = 2
     N = int(data.size()[1]/D)
 
-    f, (ax1, ax2) = plt.subplots(1, 2, sharey=False, sharex=True)
+    f, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=False, sharex=True)
     # plot data
     plt.axes(ax1)
     sns.tsplot(data.view(batch_size,N,-1).data.numpy())
 
     # plot reconstruction
     plt.axes(ax2)
-    # sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
+    sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
 
-
+    plt.axes(ax3)
     sample_Sigma = bivech2(enc_mean.view(batch_size,N,-1))
     sample_vechSigma = bvech(sample_Sigma).data.numpy()
     
