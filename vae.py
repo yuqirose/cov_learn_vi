@@ -41,8 +41,10 @@ class VAE(nn.Module):
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
-        t = torch.linspace(0,2,steps=t_dim+1); t = t[1:]
-        self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-4*torch.eye(t_dim))
+        # t = torch.linspace(0,2,steps=t_dim+1); t = t[1:]
+        # self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-4*torch.eye(t_dim))
+        a = torch.randn(t_dim,t_dim)
+        self.K = torch.mm(a, a.t()) # make symmetric positive definite
         self.Kh = torch.potrf(self.K)
         self.iK = torch.potri(self.Kh)
 

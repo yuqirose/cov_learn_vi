@@ -48,10 +48,13 @@ def plot_ts(data, enc_mean, dec_mean):
     f, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=False, sharex=True)
     # plot data
     plt.axes(ax1)
+    ax1.set_ylim(-0.1,0.1)
+
     sns.tsplot(data.view(batch_size,N,-1).data.numpy())
 
     # plot reconstruction
     plt.axes(ax2)
+    ax2.set_ylim(-0.1,0.1)
     sns.tsplot(dec_mean.view(batch_size,N,-1).data.numpy())
 
     plt.axes(ax3)
