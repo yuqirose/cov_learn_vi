@@ -10,11 +10,11 @@ import torch.utils.data
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 from torchvision.utils import save_image
-from vae_bkdg import VAE
+from vae import VAE, VAE_BKDG
 from reader import SynthDataset
 from plot import plot_ts
 import matplotlib.pyplot as plt 
-# plt.switch_backend('agg')
+plt.switch_backend('agg')
 import visdom 
 
 
@@ -60,11 +60,12 @@ def train(epoch):
     if is_plot:
         #z = model.sample_z(data)
         plot_ts(data, enc_mean, dec_mean)
-        # if epoch%5==0:
-        #     plt.savefig('plot/z_'+str(epoch)+'.png')
-        plt.show(block=False)
-        plt.pause(1e-6)
-        plt.close()
+        if epoch%5==0:
+            fname='plot/'+ args.model+'_z_'+str(epoch)+'.png'
+            plt.savefig(fname)
+        # plt.show(block=False)
+        # plt.pause(1e-6)
+        # plt.close()
 
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
@@ -105,20 +106,23 @@ def test(epoch):
 T = 200
 D = 2
 x_dim = T*D #28*28 
-h_dim = 100
 t_dim = T
 z_dim = D
 n_layers =  1
 clip = 1.10
 is_plot=True
 data_set = "synth"
-lr = 2e-3
 
 
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
+parser.add_argument('--model', type=str, default='VAE',help='learning model')
+parser.add_argument('--lr', type=float, default=2e-3, metavar='N',
+                    help='learning rate for training (default: 0.002)')
+parser.add_argument('--hz', type=float, default=100, metavar='N',
+                    help='hidden size for training (default: 100)')
 parser.add_argument('--batch-size', type=int, default=50, metavar='N',
                     help='input batch size for training (default: 20)')
-parser.add_argument('--epochs', type=int, default=200, metavar='N',
+parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -161,9 +165,9 @@ elif data_set == "mnist":
         batch_size=args.batch_size, shuffle=True)
 
 
-
-model = VAE(x_dim, h_dim, t_dim)
-optimizer = optim.Adam(model.parameters(), lr=lr)
+Model = globals()[args.model]
+model = Model(x_dim, args.hz, t_dim)
+optimizer = optim.Adam(model.parameters(), lr=args.lr)
 scheduler = MultiStepLR(optimizer, milestones=[20,40], gamma=0.1)
 
 for epoch in range(1, args.epochs + 1):
@@ -176,11 +180,10 @@ for epoch in range(1, args.epochs + 1):
         # 'results/sample_' + str(epoch) + '.png')
 
     #saving model
-
-    # if epoch % args.log_interval == 1:
-    #     fn = 'saves/vae_state_dict_'+str(epoch)+'.pth'
-    #     torch.save(model.state_dict(), fn)
-    #     print('Saved model to '+fn)
+    if epoch % args.log_interval == 1:
+        fn = 'saves/vae_state_dict_'+str(epoch)+'.pth'
+        torch.save(model.state_dict(), fn)
+        print('Saved model to '+fn)
 
 
 
