@@ -29,11 +29,13 @@ class VAE(nn.Module):
 
         # feature
         self.fc0 = nn.Linear(x_dim, h_dim)
+        # self.fc1 = nn.Linear(h_dim, h_dim)
         # encode
         self.fc21 = nn.Linear(h_dim, z_dim)
         self.fc22 = nn.Linear(h_dim, z_dim)
         # transform
-        self.fc3 = nn.Linear(z_dim, h_dim)
+        self.fc2 = nn.Linear(z_dim, h_dim)
+        # self.fc3 = nn.Linear(h_dim, h_dim)
         # decode
         self.fc41 = nn.Linear(h_dim, x_dim)
         self.fc42 = nn.Linear(h_dim, x_dim)
@@ -41,20 +43,16 @@ class VAE(nn.Module):
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
-        # t = torch.linspace(0,2,steps=t_dim+1); t = t[1:]
-        # self.K = Variable(torch.exp(-torch.pow(t.unsqueeze(1)-t.unsqueeze(0),2)/2/2) + 1e-4*torch.eye(t_dim))
-        a = torch.randn(t_dim,t_dim)
-        self.K = torch.mm(a, a.t()) # make symmetric positive definite
-        self.Kh = torch.potrf(self.K)
-        self.iK = torch.potri(self.Kh)
+
 
     def encode(self, x):
         """ p(z|x)
             C = D + uu'
         """
-        h1 = self.relu(self.fc0(x))
-        enc_mean = self.fc21(h1)
-        enc_cov = self.fc22(h1)
+        h0 = self.relu(self.fc0(x))
+        # h1 = self.tanh(self.fc1(h0))
+        enc_mean = self.fc21(h0)
+        enc_cov = self.fc22(h0)
         return enc_mean, enc_cov
 
     def reparameterize(self, mu, logcov):
@@ -69,14 +67,16 @@ class VAE(nn.Module):
 
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
-        h3 = self.relu(self.fc3(z))
-        dec_mean = self.fc41(h3)
-        dec_cov = self.fc42(h3)
+        h2 = self.tanh(self.fc2(z))
+        # h3 = self.relu(self.fc3(h2))
+        dec_mean = self.fc41(h2)
+        dec_cov = self.fc42(h2)
         return dec_mean, dec_cov
 
     def forward(self, x, dist):
         # encoder 
         enc_mean, enc_cov = self.encode(x.view(-1, self.x_dim))
+        print(enc_mean[0,0])
         z = self.reparameterize(enc_mean, enc_cov)
 
         # decoder
@@ -133,7 +133,7 @@ class VAE(nn.Module):
 
 class VAE_BKDG(nn.Module):
     def __init__(self, x_dim, h_dim, t_dim):
-        super(VAE, self).__init__()
+        super(VAE_BKDG, self).__init__()
 
         self.x_dim = x_dim
         self.h_dim = h_dim
@@ -147,11 +147,13 @@ class VAE_BKDG(nn.Module):
 
         # feature
         self.fc0 = nn.Linear(x_dim, h_dim)
+        self.fc1 = nn.Linear(h_dim, h_dim)
         # encode
         self.fc21 = nn.Linear(h_dim, z_dim)
         self.fc22 = nn.Linear(h_dim, int(t_dim*(t_dim+1)/2))
         # transform
-        self.fc3 = nn.Linear(z_dim, h_dim)
+        self.fc2 = nn.Linear(z_dim, h_dim)
+        self.fc3 = nn.Linear(h_dim, h_dim)
         # decode
         self.fc41 = nn.Linear(h_dim, x_dim)
         self.fc42 = nn.Linear(h_dim, x_dim)
@@ -169,7 +171,8 @@ class VAE_BKDG(nn.Module):
         """ p(z|x)
             C = D + uu'
         """
-        h1 = self.relu(self.fc0(x))
+        h0 = self.relu(self.fc0(x))
+        h1 = self.tanh(self.fc1(h0))
         enc_mean = self.fc21(h1)
         enc_cov = self.fc22(h1)
         return enc_mean, enc_cov
@@ -195,9 +198,11 @@ class VAE_BKDG(nn.Module):
         else:
             return mu
 
+
     def decode(self, z):
         # p(x|z)~ N(f(z), \sigma )
-        h3 = self.relu(self.fc3(z))
+        h2 = self.tanh(self.fc2(z))
+        h3 = self.relu(self.fc3(h2))
         dec_mean = self.fc41(h3)
         dec_cov = self.fc42(h3)
         return dec_mean, dec_cov

@@ -61,10 +61,10 @@ def train(epoch):
         #z = model.sample_z(data)
         plot_ts(data, enc_mean, dec_mean)
         if epoch%5==0:
-            fname='plot/'+ args.model+'_z_'+str(epoch)+'.png'
+            fname='plot/'+ args.model+'2_z_'+str(epoch)+'.png'
             plt.savefig(fname)
         # plt.show(block=False)
-        # plt.pause(1e-6)
+        plt.pause(1e-6)
         # plt.close()
 
 
@@ -163,7 +163,6 @@ elif data_set == "mnist":
        datasets.MNIST('data', train=False, download=True,
   transform=transforms.ToTensor()),
         batch_size=args.batch_size, shuffle=True)
-
 
 Model = globals()[args.model]
 model = Model(x_dim, args.hz, t_dim)
