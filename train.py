@@ -118,7 +118,7 @@ parser = argparse.ArgumentParser(description='VAE MNIST Example')
 parser.add_argument('--model', type=str, default='VAE',help='learning model')
 parser.add_argument('--lr', type=float, default=2e-3, metavar='N',
                     help='learning rate for training (default: 0.002)')
-parser.add_argument('--hz', type=float, default=100, metavar='N',
+parser.add_argument('--hz', type=int, default=100, metavar='N',
                     help='hidden size for training (default: 100)')
 parser.add_argument('--batch-size', type=int, default=50, metavar='N',
                     help='input batch size for training (default: 20)')
